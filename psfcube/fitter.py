@@ -463,7 +463,8 @@ class SlicePSFCollection( BaseObject ):
                                parangle_boundaries=[0,360])
 
         self.adrfitter.fit( **kwargs_update(default_guesses,**kwargs) )
-        if self.adrfitter.fitvalues["chi2"] / self.adrfitter.dof >5:
+        
+        if self.adrfitter.dof> 0 and self.adrfitter.fitvalues["chi2"] / self.adrfitter.dof >5:
             print("WARNING: ADR fit chi2/dof of %.1f - most likely a badly fitted point is causing trouble"%(self.adrfitter.fitvalues["chi2"] / self.adrfitter.dof))
             
         if show:
