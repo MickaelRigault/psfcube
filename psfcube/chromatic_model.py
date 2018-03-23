@@ -74,37 +74,86 @@ class ChromaticNormalMoffat( BaseObject ):
     #  Methods             #
     # ==================== #
     def force_fit(self, cube, psfmodel="NormalMoffatCurved",
-                      ell=None, theta=None, force_ellipse=True):
-        """ """
+                      slice_width=None,
+                      ell=None, theta=None, ellerr=None, thetaerr=None,
+                      force_ellipse=True,
+                      force_centroid=True,
+                      force_stddev=True,force_alpha=True):
+        """ 
+        slice_width: [int/None]
+            How may lbda-slices array do you combine.
+            None=>1
+            1 means, each slice individually
+            2 means you stack 2 slices together (hence having a spectrum with only half the lbda-binning
+            ...
+        """
         from .fitter import fit_slice
+        from astropy.stats import mad_std
         slpsf = {}
-        stddev_lbdas = self.get_stddev(cube.lbda)
+        # = Which wavelengths
+        if slice_width is None or slice_width == 1:
+            slice_width = None
+            lbdas = cube.lbda
+        elif slice_width<=0:
+            raise ValueError("slice_width must be positive or None %d given"%slice_width)
+        elif slice_width > 0:
+            lbda_min,lbda_max = cube.lbda[::slice_width],cube.lbda[slice_width-1::slice_width]
+            if len(lbda_min)>len(lbda_max):
+                lbda_min = lbda_min[:len(lbda_max)]
+            lbdas = np.mean([lbda_min,lbda_max], axis=0)
+
+        stddev_lbdas = self.get_stddev(lbdas)
+
         # Moffat
         achromatic_moffat_alpha = self.get_moffat_alpha(False)
+        amplitude_ratio = np.nanmean(self.amplitude_ratio)
+        amplitude_ratioerr = mad_std(self.amplitude_ratio)*2
         profile_lbda = {"alpha_guess":achromatic_moffat_alpha[0],
-                        "alpha_fixed":True,
+                        "alpha_fixed": force_alpha,
+                        "alpha_boundaries":[achromatic_moffat_alpha[0]-0.2,achromatic_moffat_alpha[0]+0.2],
                         "centroids_err":[0.05,0.05],
-                        "force_centroid":False,
-                        "stddev_fixed":False}
+                        "force_centroid":force_centroid,
+                        "stddev_fixed":force_stddev,
+                        "amplitude_ratio_guess": np.nanmean(self.amplitude_ratio),
+                        "amplitude_ratio_boundaries": [np.nanmax([0.1,amplitude_ratio-amplitude_ratioerr]), amplitude_ratio+amplitude_ratioerr]
+                        }
         # Ellipse
         if ell is not None:
             profile_lbda["ell_guess"] = ell
+            if ellerr is not None: profile_lbda["ell_boundaries"] = [ell-ellerr, ell+ellerr]
         if theta is not None:
             profile_lbda["theta_guess"] = theta
+            if thetaerr is not None: profile_lbda["theta_boundaries"] = [theta-thetaerr, theta+thetaerr]
+                
         if ell is not None and theta is not None and force_ellipse:
             profile_lbda["ell_fixed"]      = True
             profile_lbda["theta_fixed"]    = True
-
-        # The Wavelength Loop
-        for i, l_ in enumerate(cube.lbda):
-            profile_lbda["stddev_guess"]      = stddev_lbdas[i]
-            profile_lbda["stddev_boundaries"] = [stddev_lbdas[i]-0.05,stddev_lbdas[i]+0.05]
-            # Centroid
-            profile_lbda["centroids"]      = self.get_position(l_)
-            if i%40 == 0:
-                print(i,"/",len(cube.lbda))
-            slpsf[i] = fit_slice(cube.get_slice(index=i, slice_object=True),
-                                     psfmodel=psfmodel, **profile_lbda)
+        # 
+        # => All Slices
+        #
+        if slice_width is None:
+            for i, l_ in enumerate(cube.lbda):
+                profile_lbda["stddev_guess"]      = stddev_lbdas[i]
+                profile_lbda["stddev_boundaries"] = [stddev_lbdas[i]-0.1,stddev_lbdas[i]+0.1]
+                # Centroid
+                profile_lbda["centroids"]      = self.get_position(l_)
+                if i%40 == 0:
+                    print(i,"/",len(cube.lbda))
+                slpsf[i] = fit_slice(cube.get_slice(index=i, slice_object=True),
+                                        psfmodel=psfmodel, **profile_lbda)
+        # 
+        # => Meta Slices
+        #
+        else:
+            for i, l_ in  enumerate(zip(lbda_min,lbda_max)):
+                profile_lbda["stddev_guess"]      = stddev_lbdas[i]
+                profile_lbda["stddev_boundaries"] = [stddev_lbdas[i]-0.1,stddev_lbdas[i]+0.1]
+                # Centroid
+                profile_lbda["centroids"]      = self.get_position(np.mean(l_))
+                if i%10 == 0:
+                    print(i,"/",len(lbdas))
+                slpsf[i] = fit_slice(cube.get_slice(lbda_min=l_[0],lbda_max=l_[1], slice_object=True),
+                                        psfmodel=psfmodel, **profile_lbda)
         return slpsf
     
     

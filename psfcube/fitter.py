@@ -13,7 +13,10 @@ from .model import read_psfmodel
 from .chromatic_model import stddev_chromaticity
 from .tools import kwargs_update
 from .chromatic_model import LBDAREF
+
 FITKEY  = "slpsf"
+USE_LEASTSQ = True
+
 
 def fit_slice(slice_, fitbuffer=None,
               psfmodel="NormalMoffatTilted", fitted_indexes=None,
@@ -52,13 +55,13 @@ def fit_slice(slice_, fitbuffer=None,
     # - Fitting
     
     dof = slpsf.npoints - slpsf.model.nparam
-    if slpsf.fitvalues["chi2"] / dof>2 and adjust_errors:
+    if slpsf.fitvalues["chi2"] / dof>2 and adjust_errors and not USE_LEASTSQ:
         from .tools import fit_intrinsic
         model = slpsf.model.get_model(slpsf._xfitted, slpsf._yfitted)
         intrinsic = fit_intrinsic(slpsf._datafitted, model, slpsf._errorfitted, dof, intrinsic_guess=None)
         slpsf.set_intrinsic_error(intrinsic / np.sqrt(2) )
         slpsf.fit( **fit_parameters )
-        
+    
     return slpsf
 
 # ====================== #
@@ -224,14 +227,14 @@ class SlicePSFCollection( BaseObject ):
         """ attach a cube to this attribute. """
         self._properties['cube'] = cube
 
-    def load_adrfitter(self, ifu_scale=1, base_parangle=0):
+    def load_adrfitter(self, spaxel_unit=1, base_parangle=0):
         """ load the ADRfitter method using the cube's adr.
         This methods need to have the cube loaded (see set_cube())
         """
         from pyifu import adrfit
         if self.cube.adr is None: self.cube.load_adr()
         self._derived_properties['adrfitter'] = adrfit.ADRFitter(self.cube.adr.copy(),
-                                                        base_parangle=base_parangle, unit=ifu_scale)
+                                                        base_parangle=base_parangle, unit=spaxel_unit)
 
     def extract_slice(self, slindex, lbda_min=None, lbda_max=None, lbdaindex=None,
                           overwrite=False):
@@ -373,8 +376,8 @@ class SlicePSFCollection( BaseObject ):
 
     # - ADR fitter
     def fit_adr(self, used_slindexes=None, fitkey=FITKEY,
-                    parangle=0,
-                    show=False, show_prop={},
+                    parangle=None, spaxel_unit=None,
+                    show=False, show_prop={}, 
                      **kwargs):
         """ Fits the adr parameters 
 
@@ -394,6 +397,10 @@ class SlicePSFCollection( BaseObject ):
             except if fitkey is None.
 
         // fit
+        spaxel_unit: [float] -optional-
+            Size of the spaxels in arcsec. 
+            (this parameter is not fitted as this is degenerated with the airmass)
+            If not provided during the load_adrfitter, it is suggested that you set it here.
 
         parangle: [float] -optional-
             Initial guess for the paralactic angle added to the header's one.
@@ -423,19 +430,41 @@ class SlicePSFCollection( BaseObject ):
         x0err = self.get_fitted_value("xcentroid.err",slindexes=used_slindexes, fitkey=fitkey)
         y0    = self.get_fitted_value("ycentroid",slindexes=used_slindexes,     fitkey=fitkey)
         y0err = self.get_fitted_value("ycentroid.err",slindexes=used_slindexes, fitkey=fitkey)
-        
+
+        if spaxel_unit is not None: self.adrfitter.model._unit = spaxel_unit
         self.adrfitter.set_data(lbda, x0, y0, x0err, y0err)
         
+        
+        if parangle is None:
+            lbda       = self.get_fitted_value("lbda",slindexes=used_slindexes,     fitkey=fitkey)
+            imin, imax = np.argwhere(lbda<np.mean(lbda)).flatten(),np.argwhere(lbda>=np.mean(lbda)).flatten()
+            if len(imin)==1:
+                x0_min = x0[imin[0]]
+                y0_min = y0[imin[0]]
+            else:
+                x0_min = np.nanmean(x0[imin])
+                y0_min = np.nanmean(y0[imin])
+                
+            if len(imax)==1:
+                x0_max = x0[imax[0]]
+                y0_max = y0[imax[0]]
+            else:
+                x0_max = np.nanmean(x0[imax])
+                y0_max = np.nanmean(y0[imax])
+                
+            parangle_guess = (np.arctan2([y0_max-y0_min], [x0_max-x0_min])/np.pi*180+90)%360
+        else:
+            parangle_guess = parangle
+            
         default_guesses = dict(airmass_guess=self.cube.header["AIRMASS"],
                                airmass_boundaries=[1,self.cube.header["AIRMASS"]*3],
                                xref_guess= np.mean(x0), yref_guess= np.mean(y0),
-                               parangle_guess=180,
+                               parangle_guess=parangle_guess,
                                parangle_boundaries=[0,360])
 
         self.adrfitter.fit( **kwargs_update(default_guesses,**kwargs) )
-        if self.adrfitter.fitvalues["chi2"] / self.adrfitter.dof >3:
+        if self.adrfitter.fitvalues["chi2"] / self.adrfitter.dof >5:
             print("WARNING: ADR fit chi2/dof of %.1f - most likely a badly fitted point is causing trouble"%(self.adrfitter.fitvalues["chi2"] / self.adrfitter.dof))
-            
             
         if show:
             self.adrfitter.show(**show_prop)
@@ -711,18 +740,27 @@ class PSFFitter( BaseFitter ):
         self._derived_properties['xfitted'] = x
         self._derived_properties['yfitted'] = y
         self._derived_properties['datafitted']  = self._spaxelhandler.data.T[self._fit_dataindex].T
-        if np.any(self._spaxelhandler.variance.T[self._fit_dataindex]<0):
-            warnings.warn("Negative variance detected. These variance at set back to twice the median vairance.")
-            var = self._spaxelhandler.variance.T[self._fit_dataindex]
-            var[var<=0] = np.nanmedian(var)*2
-            self._derived_properties['errorfitted'] = np.sqrt(var)
-        else:
-            self._derived_properties['errorfitted'] = np.sqrt(self._spaxelhandler.variance.T[self._fit_dataindex]).T
+        if USE_LEASTSQ:
+            from astropy.stats import mad_std
             
-        if self._side_properties['errorscale'] is None:
+            self._derived_properties['errorfitted'] = mad_std(self._datafitted[self._datafitted==self._datafitted])*1.4
             self.set_error_scale(1)
-        if self._side_properties['intrinsicerror'] is None:
             self.set_intrinsic_error(0)
+            
+        else:
+            if np.any(self._spaxelhandler.variance.T[self._fit_dataindex]<0):
+                warnings.warn("Negative variance detected. These variance at set back to twice the median vairance.")
+                var = self._spaxelhandler.variance.T[self._fit_dataindex]
+                var[var<=0] = np.nanmedian(var)*2
+                self._derived_properties['errorfitted'] = np.sqrt(var)
+            else:
+                self._derived_properties['errorfitted'] = np.sqrt(self._spaxelhandler.variance.T[self._fit_dataindex]).T
+            
+            if self._side_properties['errorscale'] is None:
+                self.set_error_scale(1)
+            
+            if self._side_properties['intrinsicerror'] is None:
+                self.set_intrinsic_error(0)
 
     def set_error_scale(self, scaleup):
         """ """
@@ -895,7 +933,7 @@ class SlicePSF( PSFFitter ):
         
     def show(self, savefile=None, show=True,
                  centroid_prop={}, logscale=True,psf_in_log=True, 
-                 vmin="2", vmax="98", xlim=[0,10], **kwargs):
+                 vmin="2", vmax="98", ylim_low=None, xlim=[0,10], **kwargs):
         """ """
         import matplotlib.pyplot            as mpl
         from .tools     import kwargs_update
@@ -937,13 +975,16 @@ class SlicePSF( PSFFitter ):
         axdata.set_title("Data")
         axmodel.set_title("Model")
         axres.set_title("Residual")
-        if psf_in_log:
-            axpsf.set_yscale("log")
-            axpsf.set_ylim(slice_.min()*0.2, slice_.max()*2)
+            
         axpsf.set_xlabel("Elliptical distance [in spaxels]")
         if xlim is not None:
             axpsf.set_xlim(*xlim)
             
+        if psf_in_log:
+            if ylim_low is None: ylim_low = slice_.min()*0.2
+            axpsf.set_ylim(ylim_low, slice_.max()*2)
+            axpsf.set_yscale("log")
+
         fig.text(0.95,0.95, "model: %s"%self.model.NAME, fontsize="small",
                      va="top", ha="right")
         fig.figout(savefile=savefile, show=show)
@@ -961,3 +1002,7 @@ class SlicePSF( PSFFitter ):
         """ """
         return len(self._datafitted)
 
+    @property
+    def lbda(self):
+        """ wavelength of the fitted slice (if given) """
+        return self.slice.lbda

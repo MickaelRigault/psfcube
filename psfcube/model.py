@@ -315,10 +315,11 @@ class BiNormalFlat( _PSFSliceModel_ ):
             ycentroid  = np.nanmean(y[argmaxes])
             
         background = np.percentile(data,10)
+        low_bounds = -np.percentile(data,0.01)
         self._guess = dict( amplitude_guess=ampl * 5,
-                            amplitude_boundaries= [-background, None],
+                            amplitude_boundaries= [None, None],
                             # - background
-                            bkgd_guess=background, bkgd_boundaries=[-background,np.percentile(data,99.9)],
+                            bkgd_guess=background, bkgd_boundaries=[None, np.percentile(data,99.9)],
                             # centroid
                             xcentroid_guess=xcentroid, xcentroid_boundaries=[xcentroid-xcentroid_err, xcentroid+xcentroid_err],
                             ycentroid_guess=ycentroid, ycentroid_boundaries=[ycentroid-ycentroid_err, ycentroid+ycentroid_err],
@@ -459,10 +460,12 @@ class MoffatFlat( _PSFSliceModel_ ):
             ycentroid  = np.nanmean(y[argmaxes])
 
         background = np.percentile(data,10)
+        low_bounds = -np.percentile(data,0.01)
         self._guess = dict( amplitude_guess=ampl * 5,
-                            amplitude_boundaries= [-background, None],
+                            amplitude_boundaries= [None, None],
                             # - background
-                            bkgd_guess=background, bkgd_boundaries=[-background,np.percentile(data,99.9)],
+                            bkgd_guess=background, bkgd_boundaries=[None, np.percentile(data,99.9)],
+
                             # centroid
                             xcentroid_guess=xcentroid, xcentroid_boundaries=[xcentroid-xcentroid_err, xcentroid+xcentroid_err],
                             ycentroid_guess=ycentroid, ycentroid_boundaries=[ycentroid-ycentroid_err, ycentroid+ycentroid_err],
@@ -600,10 +603,11 @@ class NormalMoffatFlat( _PSFSliceModel_ ):
             ycentroid  = np.nanmean(y[argmaxes])
 
         background = np.percentile(data,10)
+        low_bounds = -np.percentile(data,0.01)
         self._guess = dict( amplitude_guess=ampl * 5,
-                            amplitude_boundaries= [-background, None],
+                            amplitude_boundaries= [None, None],
                             # - background
-                            bkgd_guess=background, bkgd_boundaries=[-background,np.percentile(data,99.9)],
+                            bkgd_guess=background, bkgd_boundaries=[None, np.percentile(data,99.9)],
                             # centroid
                             xcentroid_guess=xcentroid, xcentroid_boundaries=[xcentroid-xcentroid_err, xcentroid+xcentroid_err],
                             ycentroid_guess=ycentroid, ycentroid_boundaries=[ycentroid-ycentroid_err, ycentroid+ycentroid_err],
@@ -615,10 +619,10 @@ class NormalMoffatFlat( _PSFSliceModel_ ):
                             theta_guess=1.5, theta_boundaries=[0,np.pi], theta_fixed=False,
                             # Size
                             stddev_guess = 1.3,
-                            stddev_boundaries=[0.5, 2],
+                            stddev_boundaries=[1., 2],
                             # moffat
                             alpha_guess=5.,
-                            alpha_boundaries=[3., 8],
+                            alpha_boundaries=[2., 10.],
                             #beta_guess=2.,
                             #beta_boundaries=[0., None],
                             # Converges faster by allowing degenerated param...
