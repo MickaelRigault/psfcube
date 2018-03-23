@@ -457,7 +457,7 @@ class SlicePSFCollection( BaseObject ):
             parangle_guess = parangle
             
         default_guesses = dict(airmass_guess=self.cube.header["AIRMASS"],
-                               airmass_boundaries=[1,self.cube.header["AIRMASS"]*3],
+                               airmass_boundaries=[1.01,self.cube.header["AIRMASS"]*3],
                                xref_guess= np.mean(x0), yref_guess= np.mean(y0),
                                parangle_guess=parangle_guess,
                                parangle_boundaries=[0,360])
