@@ -982,7 +982,7 @@ class SlicePSF( PSFFitter ):
             axpsf.set_xlim(*xlim)
             
         if psf_in_log:
-            if ylim_low is None: ylim_low = slice_.min()*0.2
+            if ylim_low is None: ylim_low = 1
             axpsf.set_ylim(ylim_low, slice_.max()*2)
             axpsf.set_yscale("log")
 
