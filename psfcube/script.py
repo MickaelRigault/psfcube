@@ -9,7 +9,8 @@ import numpy as np
 
 
 def extract_star(cube, lbda_step1=None, psfmodel="NormalMoffatTilted",
-                centroids=None, only_step1=False, spaxel_unit=1, step1_fit_prop={},
+                centroids=None, centroids_err=[5,5],
+                only_step1=False, spaxel_unit=1, step1_fit_prop={},
                 final_slice_width=None,
                 force_ellipse=True, force_centroid=True, force_stddev=True, force_alpha=True):
     """ 
@@ -29,7 +30,8 @@ def extract_star(cube, lbda_step1=None, psfmodel="NormalMoffatTilted",
     # Step 1
     psffit = fit_metaslices(cube, lbda_step1, 
                             psfmodel=psfmodel, 
-                            centroids=centroids, spaxel_unit=spaxel_unit, **step1_fit_prop)
+                            centroids=centroids, centroids_err=centroids_err,
+                            spaxel_unit=spaxel_unit, **step1_fit_prop)
     if only_step1:
         return psffit
     
