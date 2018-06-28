@@ -103,7 +103,6 @@ def fit_metaslices(cube, lbdas, psfmodel="NormalMoffatTilted",
                        spaxel_unit=1,
                        **kwargs):
     """ """
-
     from .fitter import SlicePSFCollection
     psffit = SlicePSFCollection()
     psffit.set_cube(cube)
