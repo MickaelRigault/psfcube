@@ -35,6 +35,7 @@ def fit_slice(slice_, fitbuffer=None,
     from .tools import kwargs_update
     slpsf = SlicePSF(slice_, psfmodel=psfmodel,
                     fitbuffer=fitbuffer, fitted_indexes=fitted_indexes)
+
     
     if centroids is None:
         xcentroid, ycentroid = None, None
@@ -113,12 +114,17 @@ class SlicePSFCollection( BaseObject ):
         theta  = self.get_fitted_value("theta" ,     slindexes=used_slindexes, fitkey=fitkey)
         thetaerr = self.get_fitted_value("theta.err",        slindexes=used_slindexes, fitkey=fitkey)
         # Excluded because boundaries
-        flagout = (np.sqrt((ell/1.)**2+(theta/3.14)**2)<ell_exclusion_to_zero) + (ellerr<1e-4) + (thetaerr<1e-4) # 1e-4 means ended in boounaries
+        flagout = (np.sqrt((ell/1.)**2+(theta/3.14)**2)<ell_exclusion_to_zero) #+ (ellerr<1e-4) + (thetaerr<1e-4) # 1e-4 means ended in boounaries
         ell[flagout] = np.NaN
         theta[flagout] = np.NaN
-        
-        return np.asarray(flagout + ( np.abs(ell-np.nanmedian(ell))>mad_std(ell[ell==ell])*4 ) + ( np.abs(theta-np.nanmedian(theta))>mad_std(theta[theta==theta])*4),
+
+        flag = np.asarray(flagout + ( np.abs(ell-np.nanmedian(ell))>mad_std(ell[ell==ell])*4 ) + ( np.abs(theta-np.nanmedian(theta))>mad_std(theta[theta==theta])*4),
                               dtype="bool")
+
+        if np.all(flag):
+            print("ALL slices have been considered as outlier... set all of them as non-outlier")
+            return ~flag
+        return flag
 
         
     # = Get Fitted Parameters
@@ -280,6 +286,8 @@ class SlicePSFCollection( BaseObject ):
         slice_ = self.cube.get_slice(lbda_min=lbda_min, lbda_max=lbda_max,
                                          index=lbdaindex, usemean=True, data='data',
                                          slice_object=True)
+        if np.isnan(np.sum(slice_.data)):
+            print("psfcube.fitter.py EXTRACT_SLICE: NaN ")
         # - add it
         self.add_slice(slice_, slindex, lbdarange, overwrite=overwrite)
 
@@ -422,6 +430,7 @@ class SlicePSFCollection( BaseObject ):
         -------
         dict (fitvalues)
         """
+
         if used_slindexes is None:
             used_slindexes = self.slindexes[~self.fetch_outlier()]
 
@@ -430,7 +439,6 @@ class SlicePSFCollection( BaseObject ):
         x0err = self.get_fitted_value("xcentroid.err",slindexes=used_slindexes, fitkey=fitkey)
         y0    = self.get_fitted_value("ycentroid",slindexes=used_slindexes,     fitkey=fitkey)
         y0err = self.get_fitted_value("ycentroid.err",slindexes=used_slindexes, fitkey=fitkey)
-
         if spaxel_unit is not None: self.adrfitter.model._unit = spaxel_unit
         self.adrfitter.set_data(lbda, x0, y0, x0err, y0err)
         
@@ -460,7 +468,7 @@ class SlicePSFCollection( BaseObject ):
                                airmass_boundaries=[1.01,self.cube.header["AIRMASS"]*3],
                                xref_guess= np.mean(x0), yref_guess= np.mean(y0),
                                parangle_guess=parangle_guess,
-                               parangle_boundaries=[0,360])
+                               parangle_boundaries=[parangle_guess-180,parangle_guess+180])
 
         self.adrfitter.fit( **kwargs_update(default_guesses,**kwargs) )
         

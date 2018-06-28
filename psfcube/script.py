@@ -28,6 +28,7 @@ def extract_star(cube, lbda_step1=None, psfmodel="NormalMoffatTilted",
 
         
     # Step 1
+
     psffit = fit_metaslices(cube, lbda_step1, 
                             psfmodel=psfmodel, 
                             centroids=centroids, centroids_err=centroids_err,
@@ -36,6 +37,7 @@ def extract_star(cube, lbda_step1=None, psfmodel="NormalMoffatTilted",
         return psffit
     
     # Step 2
+
     # ellipse_parameters
     ell, ellerr, theta, thetaerr = psffit.get_ellipse_parameters()
     
@@ -101,6 +103,7 @@ def fit_metaslices(cube, lbdas, psfmodel="NormalMoffatTilted",
                        spaxel_unit=1,
                        **kwargs):
     """ """
+
     from .fitter import SlicePSFCollection
     psffit = SlicePSFCollection()
     psffit.set_cube(cube)
