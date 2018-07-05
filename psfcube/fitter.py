@@ -372,7 +372,7 @@ class SlicePSFCollection( BaseObject ):
         SlicePSF [the object containing the psf fitting methods and results]
         """
         self._test_index_(slindex)
-        slpsf =  fit_slice(self.slices[slindex]['slice'], psfmodel=psfmodel,
+        slpsf = fit_slice(self.slices[slindex]['slice'], psfmodel=psfmodel,
                         centroids=centroids, centroids_err=centroids_err,
                         adjust_errors=adjust_errors, **kwargs)
         
@@ -444,31 +444,15 @@ class SlicePSFCollection( BaseObject ):
         
         
         if parangle is None:
-            lbda       = self.get_fitted_value("lbda",slindexes=used_slindexes,     fitkey=fitkey)
-            imin, imax = np.argwhere(lbda<np.mean(lbda)).flatten(),np.argwhere(lbda>=np.mean(lbda)).flatten()
-            if len(imin)==1:
-                x0_min = x0[imin[0]]
-                y0_min = y0[imin[0]]
-            else:
-                x0_min = np.nanmean(x0[imin])
-                y0_min = np.nanmean(y0[imin])
-                
-            if len(imax)==1:
-                x0_max = x0[imax[0]]
-                y0_max = y0[imax[0]]
-            else:
-                x0_max = np.nanmean(x0[imax])
-                y0_max = np.nanmean(y0[imax])
-                
-            parangle_guess = (np.arctan2([y0_max-y0_min], [x0_max-x0_min])/np.pi*180+90)%360
+            parangle_guess = self.cube.header["TEL_PA"]+10 # + 10 because of exposure time drifting
         else:
             parangle_guess = parangle
             
-        default_guesses = dict(airmass_guess=self.cube.header["AIRMASS"],
-                               airmass_boundaries=[1.01,self.cube.header["AIRMASS"]*3],
+        default_guesses = dict(airmass_guess=self.cube.header["AIRMASS"]+0.05, # for drifting
+                               airmass_boundaries=[1.0005,self.cube.header["AIRMASS"]*1.5],
                                xref_guess= np.mean(x0), yref_guess= np.mean(y0),
                                parangle_guess=parangle_guess,
-                               parangle_boundaries=[parangle_guess-180,parangle_guess+180])
+                               parangle_boundaries=[parangle_guess-90,parangle_guess+90])
 
         self.adrfitter.fit( **kwargs_update(default_guesses,**kwargs) )
         
