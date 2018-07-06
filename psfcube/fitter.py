@@ -452,7 +452,7 @@ class SlicePSFCollection( BaseObject ):
                                airmass_boundaries=[1.0005,self.cube.header["AIRMASS"]*1.5],
                                xref_guess= np.mean(x0), yref_guess= np.mean(y0),
                                parangle_guess=parangle_guess,
-                               parangle_boundaries=[parangle_guess-90,parangle_guess+90])
+                               parangle_boundaries=[parangle_guess-180,parangle_guess+180])
 
         self.adrfitter.fit( **kwargs_update(default_guesses,**kwargs) )
         
