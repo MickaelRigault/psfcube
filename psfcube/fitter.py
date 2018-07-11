@@ -942,7 +942,7 @@ class SlicePSF( PSFFitter ):
         axres   = fig.add_axes([left+2*(width+space), bottom, width, height],
                                    sharex=axdata, sharey=axdata)
         
-        axpsf   = fig.add_axes([left+3*(width+space)+space*1.5, bottom, 0.95-(left+3*(width+space)+space), height])
+        axpsf   = fig.add_axes([left+3*(width+space)+space*1.5, bottom, 0.99-(left+3*(width+space)+space), height])
 
         # = Data
         slice_    = self.slice.data 
