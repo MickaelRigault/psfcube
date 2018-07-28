@@ -379,7 +379,7 @@ class BiNormalFlat( _PSFSliceModel_ ):
                             # SEDM DEFAULT VARIABLES   #
                             # ------------------------ #
                             # Ellipticity
-                            ell_guess=0.05, ell_boundaries=[0,0.5], ell_fixed=False,
+                            ell_guess=0.05, ell_boundaries=[0,0.33], ell_fixed=False,
                             theta_guess=1.5, theta_boundaries=[0,np.pi], theta_fixed=False,
                             # Size
                             stddev_guess = 1.3,
@@ -525,7 +525,7 @@ class MoffatFlat( _PSFSliceModel_ ):
                             # SEDM DEFAULT VARIABLES   #
                             # ------------------------ #
                             # Ellipticity
-                            ell_guess=0.05, ell_boundaries=[0,0.5], ell_fixed=False,
+                            ell_guess=0.05, ell_boundaries=[0,0.33], ell_fixed=False,
                             theta_guess=1.5, theta_boundaries=[0,np.pi], theta_fixed=False,
                             # Size
                             # moffat
@@ -667,7 +667,7 @@ class NormalMoffatFlat( _PSFSliceModel_ ):
                             # SEDM DEFAULT VARIABLES   #
                             # ------------------------ #
                             # Ellipticity
-                            ell_guess=0.05, ell_boundaries=[0,0.5], ell_fixed=False,
+                            ell_guess=0.05, ell_boundaries=[0,0.33], ell_fixed=False,
                             theta_guess=1.5, theta_boundaries=[0,np.pi], theta_fixed=False,
                             # Size
                             stddev_guess = 1.3,
