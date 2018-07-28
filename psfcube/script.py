@@ -109,7 +109,7 @@ def _get_spectrum_normalization_(slfits, ncore=None, notebook=False, verbose=Tru
             ncore = 1
 
     if verbose: print("Measuring Spectrum Normalization, using %d cores"%ncore)
-    with ProgressBar( len(slpsf), ipython_widget=notebook) as bar:
+    with ProgressBar( len(slfits), ipython_widget=notebook) as bar:
         p = multiprocessing.Pool(ncore)
         res = {}
         for j, result in enumerate( p.imap( normalisation_func, [slfits[i].model.param_profile for i in range(len( slfits))] )):
