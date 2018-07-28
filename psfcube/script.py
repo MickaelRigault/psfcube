@@ -65,7 +65,7 @@ def extract_star(cube, lbda_step1=None, psfmodel="NormalMoffatTilted",
         
     bkgdmodel = get_cube(  databkgd, **cube_prop)
     # PSF
-    psfmodel  = get_cube(  np.asarray([slfits[i].model.get_profile(slfits[i]._xfitted, slfits[i]._yfitted)
+    psfmodel_  = get_cube(  np.asarray([slfits[i].model.get_profile(slfits[i]._xfitted, slfits[i]._yfitted)
                                            for i in range(len(lbdas))]),
                         **cube_prop)
     # Complit Model
@@ -84,7 +84,7 @@ def extract_star(cube, lbda_step1=None, psfmodel="NormalMoffatTilted",
         err  /= norm
         
     spectrum  = get_spectrum(lbdas, flux, variance=err**2, header=cube.header)
-    return spectrum, model, psfmodel, bkgdmodel, psffit, slfits
+    return spectrum, model, psfmodel_, bkgdmodel, psffit, slfits
 
 
 def _get_spectrum_normalization_(slfits, ncore=None, notebook=False, verbose=True,
