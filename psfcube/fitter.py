@@ -570,7 +570,7 @@ class SlicePSFCollection( BaseObject ):
 
     def show_adr(self, ax=None, **kwargs):
         """ """
-        self.adrfitter.show(ax=ax,**kwargs)
+        self.adrfitter.show(ax=ax, guess_airmass=self.cube.header["AIRMASS"], **kwargs)
         
     # =================== #
     #   Internal          #
