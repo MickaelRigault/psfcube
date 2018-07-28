@@ -78,8 +78,8 @@ def extract_star(cube, lbda_step1=None, psfmodel="NormalMoffatTilted",
     # Normalization
     if normalized:
         normalization = _get_spectrum_normalization_(slfits, psfmodel=psfmodel,
-                                                         ncore=ncore, notebook=notebook, verbose=verbose
-        norm = np.asarray([normalization[i][0] for i in range( len(normalization)) ])
+                                                         ncore=ncore, notebook=notebook, verbose=verbose)
+        norm = np.asarray([normalization[i][0] for i in range( len(normalization) ) ])
         flux /= norm
         err  /= norm
         
