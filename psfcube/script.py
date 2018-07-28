@@ -13,7 +13,7 @@ def extract_star(cube, lbda_step1=None, psfmodel="NormalMoffatTilted",
                 only_step1=False, spaxel_unit=1, step1_fit_prop={},
                 final_slice_width=None,
                 force_ellipse=True, force_centroid=True, force_stddev=True, force_alpha=True,
-                normalized=True, ncore=None, notebook=False, verbose=True):
+                normalized=False, ncore=None, notebook=False, verbose=True):
     """ 
     Returns
     -------
@@ -77,6 +77,9 @@ def extract_star(cube, lbda_step1=None, psfmodel="NormalMoffatTilted",
     
     # Normalization
     if normalized:
+        print(" ******************* ")
+        print("WARNING: normalized tools is not accurate yet.")
+        print(" ******************* ")
         normalization = _get_spectrum_normalization_(slfits, psfmodel=psfmodel,
                                                          ncore=ncore, notebook=notebook, verbose=verbose)
         norm = np.asarray([normalization[i][0] for i in range( len(normalization) ) ])
