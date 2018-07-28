@@ -449,7 +449,7 @@ class SlicePSFCollection( BaseObject ):
             parangle_guess = parangle
             
         default_guesses = dict(airmass_guess=self.cube.header["AIRMASS"]+0.05, # for drifting
-                               airmass_boundaries=[1.0005,self.cube.header["AIRMASS"]*1.3],
+                               airmass_boundaries=[1.0005,self.cube.header["AIRMASS"]*1.4],
                                xref_guess= np.mean(x0), yref_guess= np.mean(y0),
                                parangle_guess=parangle_guess,
                                parangle_boundaries=[parangle_guess-270,parangle_guess+270])
