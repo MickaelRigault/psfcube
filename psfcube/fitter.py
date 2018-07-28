@@ -571,6 +571,7 @@ class SlicePSFCollection( BaseObject ):
     def show_adr(self, ax=None, **kwargs):
         """ """
         self.adrfitter.show(ax=ax,**kwargs)
+        
     # =================== #
     #   Internal          #
     # =================== #

@@ -6,7 +6,7 @@
 
 import numpy as np
 from scipy.stats import norm
-
+from scipy import integrate
 from modefit.baseobjects import BaseModel
 
 ################################
@@ -166,6 +166,58 @@ def _default_moffat_normalization_(alpha):
                  0.0013096135691818885,
                  -4.1053249828530274e-05]
     return np.dot([1,alpha,alpha**2, alpha**3, alpha**4, alpha**5],coefs)
+
+
+
+def get_normalmoffat_normalisation( param_profile,
+                                    xbounds=50, ybounds=50,
+                                    epsabs=1e-2 ):
+    """ measures the normalisation coefficient one should apply to fitvalues["amplitude"] to have 
+    the effective amplitude (i.e., integral of the 2D profile model is 1 if "amplitude" equals 1).
+    
+    
+    Parameters
+    ----------
+
+    epsabs : float, optional
+        Absolute tolerance passed directly to the inner 1-D quadrature integration. 
+        # Scipy default is 1.49e-8.
+
+
+
+    // from scipy.integrate.dblquad  //
+
+    a, b : float
+        The limits of integration in x: a < b
+
+        => a =  xcentroid - xbound
+        => b =  xcentroid + xbound
+
+    gfun : callable or float
+        The lower boundary curve in y which is a function taking a single floating point argument (x) and returning a floating point result or a float indicating a constant boundary curve.
+
+        => gfun = lambda x:  ycentroid-ybounds
+
+    hfun : callable or float
+        The upper boundary curve in y (same requirements as gfun).
+
+        => hfun = lambda x:  ycentroid+ybounds
+
+
+        
+    Return 
+    ------
+    float, float 
+         [normalisation, estimated error]
+    """
+    args = [param_profile[k] for k in ["stddev", "alpha", "amplitude_ratio", "theta", "ell", "xcentroid", "ycentroid"]]
+    return integrate.dblquad(normalmoffat_profile,
+                                 param_profile["xcentroid"]-xbounds, param_profile["xcentroid"]+xbounds,
+                                 gfun = lambda x:  param_profile["ycentroid"]-ybounds,
+                                 hfun = lambda x:  param_profile["ycentroid"]+ybounds,
+                                 epsabs=epsabs, args=args)
+
+
 
 # ========================= #
 #                           #

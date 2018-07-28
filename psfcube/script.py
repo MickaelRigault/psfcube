@@ -12,7 +12,8 @@ def extract_star(cube, lbda_step1=None, psfmodel="NormalMoffatTilted",
                 centroids=None, centroids_err=[5,5],
                 only_step1=False, spaxel_unit=1, step1_fit_prop={},
                 final_slice_width=None,
-                force_ellipse=True, force_centroid=True, force_stddev=True, force_alpha=True):
+                force_ellipse=True, force_centroid=True, force_stddev=True, force_alpha=True,
+                normalized=True, ncore=None, notebook=False, verbose=True):
     """ 
     Returns
     -------
@@ -73,9 +74,51 @@ def extract_star(cube, lbda_step1=None, psfmodel="NormalMoffatTilted",
                         **cube_prop)
     # = The spectrum
     flux,err  = np.asarray([[slfits[i].fitvalues["amplitude"],slfits[i].fitvalues["amplitude.err"]]  for i in range(len(lbdas))]).T
-    spectrum  = get_spectrum(lbdas, flux, variance=err**2, header=cube.header)
     
+    # Normalization
+    if normalized:
+        normalization = _get_spectrum_normalization_(slfits, psfmodel=psfmodel,
+                                                         ncore=ncore, notebook=notebook, verbose=verbose
+        norm = np.asarray([normalization[i][0] for i in range( len(normalization)) ])
+        flux /= norm
+        err  /= norm
+        
+    spectrum  = get_spectrum(lbdas, flux, variance=err**2, header=cube.header)
     return spectrum, model, psfmodel, bkgdmodel, psffit, slfits
+
+
+def _get_spectrum_normalization_(slfits, ncore=None, notebook=False, verbose=True,
+                                     psfmodel="NormalMoffatTilted"):
+    """ """
+    if "NormalMoffat" in psfmodel:
+        from .model import get_normalmoffat_normalisation
+        normalisation_func = get_normalmoffat_normalisation
+    else:
+        raise NotImplementedError("Only NormalMoffat profile normalization implemented")
+    
+    import multiprocessing
+    from astropy.utils.console import ProgressBar
+    if ncore is None:
+        if multiprocessing.cpu_count()>20:
+            ncore = multiprocessing.cpu_count() - 8
+        elif multiprocessing.cpu_count()>8:
+            ncore = multiprocessing.cpu_count() - 5
+        else:
+            ncore = multiprocessing.cpu_count() - 2
+        if ncore==0:
+            ncore = 1
+
+    if verbose: print("Measuring Spectrum Normalization, using %d cores"%ncore)
+    with ProgressBar( len(slpsf), ipython_widget=notebook) as bar:
+        p = multiprocessing.Pool(ncore)
+        res = {}
+        for j, result in enumerate( p.imap( normalisation_func, [slfits[i].model.param_profile for i in range(len( slfits))] )):
+            res[j] = result
+            bar.update(j)
+                
+    return res
+        
+        
 
 
     
