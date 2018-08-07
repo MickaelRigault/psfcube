@@ -11,7 +11,7 @@ MAINTAINER_EMAIL = 'm.rigault@ipnl.in2p3.fr'
 URL = 'https://github.com/MickaelRigault/psfcube'
 LICENSE = 'Apache 2.0'
 DOWNLOAD_URL = 'https://github.com/MickaelRigault/psfcube/0.4'
-VERSION = '0.4.0'
+VERSION = '0.4.1'
 
 try:
     from setuptools import setup, find_packages
@@ -22,9 +22,6 @@ except ImportError:
 def check_dependencies():
     install_requires = []
 
-    # Just make sure dependencies exist, I haven't rigorously
-    # tested what the minimal versions that will work are
-    # (help on that would be awesome)
     try:
         import propobject
     except ImportError:
