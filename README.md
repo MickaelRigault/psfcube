@@ -1,6 +1,6 @@
 # psfcube
 
-[![PyPI](https://img.shields.io/pypi/v/astrobject.svg?style=flat-square)](https://pypi.python.org/pypi/psfcube)
+[![PyPI](https://img.shields.io/pypi/v/psfcube.svg?style=flat-square)](https://pypi.python.org/pypi/psfcube)
 
 
 Module to fit 3D PSF on IFU data
