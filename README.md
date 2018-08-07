@@ -9,6 +9,9 @@ Module to fit 3D PSF on IFU data
 # Installation
 
 `pip install psfcube` (favored)
+
+or
+
 ```bash
 git pull https://github.com/MickaelRigault/psfcube.git
 cd psfcube
