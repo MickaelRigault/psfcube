@@ -329,6 +329,28 @@ class _PSFSliceModel_( BaseModel ):
         """ The background at the given positions """
         raise NotImplementedError("You must define the get_background")
 
+    def get_radial_profile(self, radius):
+        """ """
+        raise NotImplementedError("You must define the get_background")
+
+    # ================ #
+    #  Properties      #
+    # ================ #
+    @property
+    def fwhm(self):
+        """ assuming the get_radial_profile(), this is *twice the radius needed to reach half the centroid flux (in unit of x,y) 
+        *Careful, does not account for ellipticity if any*
+
+        ```python
+        rmodel = np.linspace(0,20,1000)
+        rspec = self.get_radial_profile(rmodel)
+        return rmodel[np.argmin(np.abs(rspec-rspec[0]/2.))]
+        ```
+        """
+        rmodel = np.linspace(0,20,1000)
+        rspec = self.get_radial_profile(rmodel)
+        return rmodel[np.argmin(np.abs(rspec-rspec[0]/2.))]
+        
 # ======================================= #
 #                                         #
 #  BiNormal + Background    Models        #
@@ -406,6 +428,18 @@ class BiNormalFlat( _PSFSliceModel_ ):
         """ The background at the given positions """
         return self.param_background["bkgd"]
 
+    
+    def get_radial_profile(self, radius):
+        """ No background by definition """
+        n1 = _normal_(radius, scale=self.param_profile['stddev'])
+        n2 = _normal_(radius,scale=self.param_profile['stddev']*self.param_profile['stddev_ratio'])
+
+        coef1 = self.param_profile['amplitude_ratio']/(1.+self.param_profile['amplitude_ratio'])
+        coef2 = 1./(1+self.param_profile['amplitude_ratio'])
+
+        amplitude = self.param_profile['amplitude']
+        return  (n2*coef2+n1*coef1)*amplitude
+    
     def display_model(self, ax, rmodel, legend=True,
                           nobkgd=True,
                           cmodel = "C1",
@@ -553,6 +587,13 @@ class MoffatFlat( _PSFSliceModel_ ):
         """ The background at the given positions """
         return self.param_background["bkgd"]
 
+
+    def get_radial_profile(self, radius):
+        """ No background by definition """
+        n1 = _moffat_(radius, alpha=self.param_profile['alpha'], beta=self.param_profile['beta'])
+        amplitude = self.param_profile['amplitude']
+        return n1*amplitude
+    
     def display_model(self, ax, rmodel, legend=True,
                           nobkgd=True,
                           cmodel = "C1",
@@ -700,6 +741,20 @@ class NormalMoffatFlat( _PSFSliceModel_ ):
         """ The background at the given positions """
         return self.param_background["bkgd"]
 
+
+    def get_radial_profile(self, radius):
+        """ No background by definition """
+        n1 = _normal_(radius,  scale=self.param_profile['stddev'])
+        n2 = _moffat_(radius, alpha=self.param_profile['alpha'],
+                          beta=_alpha_to_beta_(self.param_profile['alpha']))
+
+        coef1 = self.param_profile['amplitude_ratio']/(1.+self.param_profile['amplitude_ratio'])
+        coef2 = 1./(1+self.param_profile['amplitude_ratio'])
+
+        amplitude = self.param_profile['amplitude']
+        return (n2*coef2+n1*coef1)*amplitude
+
+        
     def display_model(self, ax, rmodel, legend=True,
                           nobkgd=True,
                           cmodel = "C1",
