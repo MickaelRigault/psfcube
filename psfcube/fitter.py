@@ -384,7 +384,7 @@ class SlicePSFCollection( BaseObject ):
 
     # - ADR fitter
     def fit_adr(self, used_slindexes=None, fitkey=FITKEY,
-                    parangle=None, spaxel_unit=None,
+                    parangle=None, spaxel_unit=None, error_floor=0.05,
                     show=False, show_prop={}, 
                      **kwargs):
         """ Fits the adr parameters 
@@ -414,6 +414,9 @@ class SlicePSFCollection( BaseObject ):
             Initial guess for the paralactic angle added to the header's one.
             Note: **kwargs goes to `adrfitter.fit()` as modefit fit properties.
         
+        error_floor: [float] -optional-
+            Minimal error added to the centroid positions to avoid convergence issues
+
         // other
 
         show: [bool] -optional-
@@ -436,9 +439,10 @@ class SlicePSFCollection( BaseObject ):
 
         lbda  = np.mean([self.slices[slindex]['lbdarange'] for slindex in used_slindexes], axis=1)
         x0    = self.get_fitted_value("xcentroid",slindexes=used_slindexes,     fitkey=fitkey)
-        x0err = self.get_fitted_value("xcentroid.err",slindexes=used_slindexes, fitkey=fitkey)
+        x0err = np.asarray(self.get_fitted_value("xcentroid.err",slindexes=used_slindexes, fitkey=fitkey))+error_floor
         y0    = self.get_fitted_value("ycentroid",slindexes=used_slindexes,     fitkey=fitkey)
-        y0err = self.get_fitted_value("ycentroid.err",slindexes=used_slindexes, fitkey=fitkey)
+        y0err = np.asarray(self.get_fitted_value("ycentroid.err",slindexes=used_slindexes, fitkey=fitkey))+error_floor
+        
         if spaxel_unit is not None: self.adrfitter.model._unit = spaxel_unit
         self.adrfitter.set_data(lbda, x0, y0, x0err, y0err)
         
