@@ -384,7 +384,7 @@ class SlicePSFCollection( BaseObject ):
 
     # - ADR fitter
     def fit_adr(self, used_slindexes=None, fitkey=FITKEY,
-                    parangle=None, spaxel_unit=None, error_floor=0.05,
+                    parangle=None, spaxel_unit=None, error_floor=0.02,
                     show=False, show_prop={}, 
                      **kwargs):
         """ Fits the adr parameters 
