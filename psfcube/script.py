@@ -6,8 +6,6 @@
 
 import numpy as np
 
-
-
 def extract_star(cube, lbda_step1=None, psfmodel="NormalMoffatTilted",
                 centroids=None, centroids_err=[5,5],
                 only_step1=False, spaxel_unit=1, step1_fit_prop={},
@@ -23,9 +21,7 @@ def extract_star(cube, lbda_step1=None, psfmodel="NormalMoffatTilted",
     from pyifu   import get_spectrum, get_cube
     
     if lbda_step1 is None:
-        lbdaranges, bins = [5000,8000], 6
-        STEP_LBDA_RANGE = np.linspace(lbdaranges[0],lbdaranges[1], bins+1)
-        lbda_step1      = np.asarray([STEP_LBDA_RANGE[:-1], STEP_LBDA_RANGE[1:]]).T
+        
 
         
     # Step 1
@@ -88,6 +84,13 @@ def extract_star(cube, lbda_step1=None, psfmodel="NormalMoffatTilted",
         
     spectrum  = get_spectrum(lbdas, flux, variance=err**2, header=cube.header)
     return spectrum, model, psfmodel_, bkgdmodel, psffit, slfits
+
+
+def lbda_and_bin_to_lbda_step1(lbdaranges, bins):
+    """ """
+    STEP_LBDA_RANGE = np.linspace(lbdaranges[0],lbdaranges[1], bins+1)
+    return np.asarray([STEP_LBDA_RANGE[:-1], STEP_LBDA_RANGE[1:]]).T
+    
 
 
 def _get_spectrum_normalization_(slfits, ncore=None, notebook=False, verbose=True,
