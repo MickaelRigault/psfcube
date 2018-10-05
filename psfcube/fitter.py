@@ -191,7 +191,6 @@ class SlicePSFCollection( BaseObject ):
                                         intrinsic = intrinsic/1.4)
         
         return res["x"]
-
     
     # Generic
     def get_fitted_value(self, key, slindexes=None, fitkey=FITKEY):
@@ -448,7 +447,14 @@ class SlicePSFCollection( BaseObject ):
         
         
         if parangle is None:
-            parangle_guess = self.cube.header["TEL_PA"]+10 # + 10 because of exposure time drifting
+            if hasattr(self.cube,"adr") and hasattr(self.cube.adr,"parangle") and self.cube.adr.parangle is not None:
+                parangle_guess = self.cube.adr.parangle
+            else:
+                try:
+                    parangle_guess = self.cube.header["TEL_PA"]+10 # + 10 because of exposure time drifting
+                except:
+                    parangle_guess = 0
+                    warnings.warn("Cannot find a parangle_guess, no self.cube.adr.parangle not TEL_PA in the header. parangle_guess set to 0")
         else:
             parangle_guess = parangle
             

@@ -5,6 +5,21 @@
 
 
 import numpy as np
+# ====================== #
+#                        #
+#  High Level Function   #
+#                        #
+# ====================== #
+def cube_to_spectrum(cube, ):
+    """ wrapper around extract_star """
+    pass
+
+
+# ====================== #
+#                        #
+#   CORE FUNCTION        #
+#                        #
+# ====================== #
 
 def extract_star(cube, lbda_step1=None, psfmodel="NormalMoffatTilted",
                 centroids=None, centroids_err=[5,5],
@@ -21,7 +36,8 @@ def extract_star(cube, lbda_step1=None, psfmodel="NormalMoffatTilted",
     from pyifu   import get_spectrum, get_cube
     
     if lbda_step1 is None:
-        
+        # 6 Optical bins
+        lbda_step1 = lbda_and_bin_to_lbda_step1([5000,8000], 6)
 
         
     # Step 1
