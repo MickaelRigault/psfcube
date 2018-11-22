@@ -10,8 +10,8 @@ MAINTAINER = 'Mickael Rigault'
 MAINTAINER_EMAIL = 'm.rigault@ipnl.in2p3.fr'
 URL = 'https://github.com/MickaelRigault/psfcube'
 LICENSE = 'Apache 2.0'
-DOWNLOAD_URL = 'https://github.com/MickaelRigault/psfcube/0.4'
-VERSION = '0.4.3'
+DOWNLOAD_URL = 'https://github.com/MickaelRigault/psfcube/0.5'
+VERSION = '0.5.0'
 
 try:
     from setuptools import setup, find_packages
