@@ -65,6 +65,81 @@ def fit_slice(slice_, fitbuffer=None,
     
     return slpsf
 
+
+
+def header_to_adr_param(header_, no_end_para_bounds=270, end_para_bounds=10):
+    """ Function that reads the header trying to find the parallactic angle and airmass information. 
+    Returns:
+    {parangle_guess:VALUE, parangle_boundaries:[VALUE,VALUE],
+     airmass_guess: VALUE,  airmass_boundaries:[VALUE,VALUE]}
+
+    """
+    dict_out = {}
+    #
+    # Paralactic angle
+    #
+    start_para_key = [k for k in header_.keys() if k in ["TEL_PA", "PARANGL","PA"]]
+    start_para_key = None if len(start_para_key) == 0 else start_para_key[0]
+    try:
+        start_para = float(header_[start_para_key])
+        if start_para<-360: # Values meaning no information, like -999
+            start_para_key = None
+    except:
+        start_para_key = None
+        
+    end_para_key = [k for k in header_.keys() if k in ["END_PA", "PA_END"]]
+    end_para_key = None if len(end_para_key) == 0 else end_para_key[0]
+    try:
+        end_para  = float(header_[end_para_key])
+        if end_para<-360: # Values meaning no information, like -999
+            end_para_key = None
+    except:
+        end_para_key = None
+        
+    if start_para_key is None:
+        warnings.warn("Cannot find a parangle_guess, no TEL_PA in the header. parangle_guess set to 0")
+        dict_out["parangle_guess"] = 0
+        dict_out["parangle_boundaries"] = [-270,270]
+    elif end_para_key is None:
+        dict_out["parangle_guess"] = start_para+10
+        dict_out["parangle_boundaries"] = [start_para-no_end_para_bounds,start_para+no_end_para_bounds]
+    else:
+        dict_out["parangle_guess"] = np.mean([start_para,end_para])
+        dict_out["parangle_boundaries"] = np.sort([start_para,end_para]).tolist()
+
+    #
+    # AIRMASS
+    #
+    start_airmass_key = [k for k in header_.keys() if k in ["TEL_AIR", "TELAIR", "AIRMASS","TEL_Z"]]
+    start_airmass_key = None if len(start_airmass_key) == 0 else start_airmass_key[0]
+    try:
+        start_airmass = float(header_[start_airmass_key])
+        if start_airmass<0: # Values meaning no information, like -999
+            start_airmass_key = None
+    except:
+        start_airmass_key = None
+        
+    end_airmass_key = [k for k in header_.keys() if k in ["END_AIR", "ENDAIR","AIREND","ENDZ","END_Z"]]
+    end_airmass_key = None if len(end_airmass_key) == 0 else end_airmass_key[0]
+    try:
+        end_airmass  = float(header_[end_airmass_key])
+        if end_airmass<0: # Values meaning no information, like -999
+            end_airmass_key = None
+    except:
+        end_airmass_key = None
+        
+    if start_airmass_key is None:
+        warnings.warn("Cannot find a parangle_guess, no TEL_PA in the header. parangle_guess set to 0")
+        dict_out["airmass_guess"] = 1.2
+        dict_out["airmass_boundaries"] = [1.00005,3]
+    elif end_airmass_key is None:
+        dict_out["airmass_guess"] = start_airmass+0.2
+        dict_out["airmass_boundaries"] = [1.00005,start_airmass*1.5]
+    else:
+        dict_out["airmass_guess"] = np.mean([start_airmass,end_airmass])
+        dict_out["airmass_boundaries"] = np.sort([start_airmass,end_airmass])
+    
+    return dict_out
 # ====================== #
 #                        #
 #    PSF Classes         #
@@ -384,7 +459,8 @@ class SlicePSFCollection( BaseObject ):
     # - ADR fitter
     def fit_adr(self, used_slindexes=None, fitkey=FITKEY,
                     parangle=None, spaxel_unit=None, error_floor=0.02,
-                    show=False, show_prop={}, 
+                    show=False, show_prop={},
+                    ignore_upper_airmass=True,
                      **kwargs):
         """ Fits the adr parameters 
 
@@ -415,6 +491,10 @@ class SlicePSFCollection( BaseObject ):
         
         error_floor: [float] -optional-
             Minimal error added to the centroid positions to avoid convergence issues
+            
+        ignore_upper_airmass: [bool] -optional-
+            Ignore the upper airmass value. This could help the flexibility of the fit if the spaxel_unit is not
+            perfectly known. 
 
         // other
 
@@ -445,24 +525,20 @@ class SlicePSFCollection( BaseObject ):
         if spaxel_unit is not None: self.adrfitter.model._unit = spaxel_unit
         self.adrfitter.set_data(lbda, x0, y0, x0err, y0err)
         
+        # ADR Guesses based on header information
+        guess_adr_param = header_to_adr_param(self.cube.header)
         
-        if parangle is None:
-            if hasattr(self.cube,"adr") and hasattr(self.cube.adr,"parangle") and self.cube.adr.parangle is not None:
-                parangle_guess = self.cube.adr.parangle
-            else:
-                try:
-                    parangle_guess = self.cube.header["TEL_PA"]+10 # + 10 because of exposure time drifting
-                except:
-                    parangle_guess = 0
-                    warnings.warn("Cannot find a parangle_guess, no self.cube.adr.parangle not TEL_PA in the header. parangle_guess set to 0")
-        else:
-            parangle_guess = parangle
+        # Overwrite
+        if parangle is not None:
+            guess_adr_param["parangle_guess"] = parangle
+            guess_adr_param["parangle_boundaries"] = [parangle-10,parangle+10]
+        if ignore_upper_airmass:
+            guess_adr_param["airmass_boundaries"] = [1.0005, guess_adr_param["airmass_guess"]*1.4]
             
-        default_guesses = dict(airmass_guess=self.cube.header["AIRMASS"]+0.05, # for drifting
-                               airmass_boundaries=[1.0005,self.cube.header["AIRMASS"]*1.4],
-                               xref_guess= np.mean(x0), yref_guess= np.mean(y0),
-                               parangle_guess=parangle_guess,
-                               parangle_boundaries=[parangle_guess-270,parangle_guess+270])
+        
+        default_guesses = {k:v for k,v in guess_adr_param.items()}
+        default_guesses["xref_guess"] = np.mean(x0)
+        default_guesses["yref_guess"] = np.mean(y0)
 
         self.adrfitter.fit( **kwargs_update(default_guesses,**kwargs) )
         

@@ -152,9 +152,14 @@ def _normal_(r, scale):
     """ """
     return norm.pdf(r, loc=0, scale=scale)
 
+def _moffat_manual_normed_(r, alpha, beta):
+    """ Manual renormalization. """
+    return  1/(2*_default_moffat_normalization_(alpha)) * (1 + (r/alpha)**2 )**(-beta)
+
 def _moffat_(r, alpha, beta):
     """ """
-    return  1/(2*_default_moffat_normalization_(alpha)) * (1 + (r/alpha)**2 )**(-beta)
+    return  2*(beta-1)/alpha**2 * (1 + (r/alpha)**2 )**(-beta)
+
 
 # profile_normalization
 def _default_moffat_normalization_(alpha):
@@ -714,8 +719,8 @@ class NormalMoffatFlat( _PSFSliceModel_ ):
                             stddev_guess = 1.3,
                             stddev_boundaries=[1., 2],
                             # moffat
-                            alpha_guess=5.,
-                            alpha_boundaries=[2., 10.],
+                            alpha_guess=8.,
+                            alpha_boundaries=[2., 15.],
                             #beta_guess=2.,
                             #beta_boundaries=[0., None],
                             # Converges faster by allowing degenerated param...
