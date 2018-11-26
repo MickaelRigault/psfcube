@@ -105,7 +105,7 @@ def header_to_adr_param(header_, no_end_para_bounds=270, end_para_bounds=10):
         dict_out["parangle_boundaries"] = [start_para-no_end_para_bounds,start_para+no_end_para_bounds]
     else:
         dict_out["parangle_guess"] = np.mean([start_para,end_para])
-        dict_out["parangle_boundaries"] = np.sort([start_para,end_para]).tolist()
+        dict_out["parangle_boundaries"] = (np.sort([start_para,end_para])+ [-2,2]).tolist() # buffer to avoid issue with end_para== start_para
 
     #
     # AIRMASS
