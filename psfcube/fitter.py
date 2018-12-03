@@ -656,7 +656,7 @@ class SlicePSFCollection( BaseObject ):
 
     def show_adr(self, ax=None, **kwargs):
         """ """
-        if 'AIRMASS' not in cube.header:
+        if 'AIRMASS' not in self.cube.header:
             self.adrfitter.show(ax=ax, guess_airmass=-1.0, **kwargs)
         else:
             self.adrfitter.show(ax=ax, guess_airmass=self.cube.header["AIRMASS"], **kwargs)
