@@ -1048,9 +1048,9 @@ class SlicePSF( PSFFitter ):
                                     spaxel_vertices=self.slice.spaxel_vertices, variance=None,
                                     indexes=self.slice.indexes)
         # = Plot
-        self.slice.show( ax=axdata, vmin=vmin, vmax=vmax , show_colorbar=False, show=False)
-        model_slice.show( ax=axmodel, vmin=vmin, vmax=vmax , show_colorbar=False, show=False )
-        res_slice.show( ax=axres, vmin=vmin, vmax=vmax , show_colorbar=False, show=False )
+        self.slice.show( ax=axdata, vmin=vmin, vmax=vmax , show_colorbar=False, show=False, autoscale=True)
+        model_slice.show( ax=axmodel, vmin=vmin, vmax=vmax , show_colorbar=False, show=False, autoscale=True )
+        res_slice.show( ax=axres, vmin=vmin, vmax=vmax , show_colorbar=False, show=False, autoscale=True )
         self.show_psf(ax=axpsf, show=False, scalex=False, scaley=False)
         
         # fancy
