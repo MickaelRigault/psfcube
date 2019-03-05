@@ -132,7 +132,7 @@ def normalmoffat_profile(x, y,
     
     r = get_elliptical_distance(x, y, xcentroid=xcentroid, ycentroid=ycentroid,  ell=ell, theta=theta)
     n1 = _normal_(r, scale=stddev) 
-    n2 = _moffat_(r, alpha, _alpha_to_beta_(alpha)) 
+    n2 = _moffat_(r, alpha, beta=2.5) 
 
     coef1 = amplitude_ratio/(1.+amplitude_ratio)
     coef2 = 1./(1+amplitude_ratio)
