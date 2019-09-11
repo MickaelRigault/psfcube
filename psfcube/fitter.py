@@ -10,7 +10,7 @@ from propobject import BaseObject
 from modefit.baseobjects import BaseFitter
 
 from .model import read_psfmodel
-from .chromatic_model import stddev_chromaticity
+from .chromatic_model import sigma_chromaticity
 from .tools import kwargs_update
 from .chromatic_model import LBDAREF
 
@@ -32,7 +32,7 @@ def fit_slice(slice_, fitbuffer=None,
     -------
     SlicePSF
     """
-    from .tools import kwargs_update
+    from .tools import kwargs_update    
     slpsf = SlicePSF(slice_, psfmodel=psfmodel,
                     fitbuffer=fitbuffer, fitted_indexes=fitted_indexes)
 
@@ -105,7 +105,7 @@ def header_to_adr_param(header_, no_end_para_bounds=270, end_para_bounds=10):
         dict_out["parangle_boundaries"] = [start_para-no_end_para_bounds,start_para+no_end_para_bounds]
     else:
         dict_out["parangle_guess"] = np.mean([start_para,end_para])
-        dict_out["parangle_boundaries"] = (np.sort([start_para,end_para])+ [-2,2]).tolist() # buffer to avoid issue with end_para== start_para
+        dict_out["parangle_boundaries"] = (np.sort([start_para,end_para])+ [-20,20]).tolist() # buffer to avoid issue with end_para== start_para
 
     #
     # AIRMASS
@@ -170,8 +170,8 @@ class SlicePSFCollection( BaseObject ):
         cmodel = chromatic_model.ChromaticNormalMoffat()
         used_slindexes  =  self.slindexes[~self.fetch_outlier()]
         cmodel.set_data( *[self.get_fitted_value(k, slindexes=used_slindexes)
-                               for k in ["stddev","alpha","amplitude_ratio","lbda",
-                                          "stddev.err","alpha.err","amplitude_ratio.err"] ] )
+                               for k in ["sigma","alpha","eta","lbda",
+                                          "sigma.err","alpha.err","eta.err"] ] )
         
         adrmodel = chromatic_model.ADRModel(self.adrfitter.model.adr, 
                                             self.adrfitter.fitvalues["xref"], self.adrfitter.fitvalues["yref"], 
@@ -186,14 +186,10 @@ class SlicePSFCollection( BaseObject ):
         from astropy.stats import mad_std
         ell    = self.get_fitted_value("ell",        slindexes=used_slindexes, fitkey=fitkey)
         ellerr = self.get_fitted_value("ell.err",        slindexes=used_slindexes, fitkey=fitkey)
-        theta  = self.get_fitted_value("theta" ,     slindexes=used_slindexes, fitkey=fitkey)
-        thetaerr = self.get_fitted_value("theta.err",        slindexes=used_slindexes, fitkey=fitkey)
+        xy  = self.get_fitted_value("xy" ,     slindexes=used_slindexes, fitkey=fitkey)
+        xyerr = self.get_fitted_value("xy.err",        slindexes=used_slindexes, fitkey=fitkey)
         # Excluded because boundaries
-        flagout = (np.sqrt((ell/1.)**2+(theta/3.14)**2)<ell_exclusion_to_zero) #+ (ellerr<1e-4) + (thetaerr<1e-4) # 1e-4 means ended in boounaries
-        ell[flagout] = np.NaN
-        theta[flagout] = np.NaN
-
-        flag = np.asarray(flagout + ( np.abs(ell-np.nanmedian(ell))>mad_std(ell[ell==ell])*4 ) + ( np.abs(theta-np.nanmedian(theta))>mad_std(theta[theta==theta])*4),
+        flag = np.asarray(( np.abs(ell-np.nanmedian(ell))>mad_std(ell[ell==ell])*4 ) + ( np.abs(xy-np.nanmedian(xy))>mad_std(xy[xy==xy])*4),
                               dtype="bool")
 
         if np.all(flag):
@@ -208,28 +204,28 @@ class SlicePSFCollection( BaseObject ):
 
         Returns
         -------
-        [mean_ell, mean_ell.err [nMAD], mean_theta, mean_theta.err [nMAD]], mask_removed (True =removed)
+        [mean_ell, mean_ell.err [nMAD], mean_xy, mean_xy.err [nMAD]], mask_removed (True =removed)
         """
         from astropy.stats import mad_std
         if used_slindexes is None:
             used_slindexes = self.slindexes[~self.fetch_outlier()]
             
         ell    = self.get_fitted_value("ell",        slindexes=used_slindexes, fitkey=fitkey)
-        theta  = self.get_fitted_value("theta" ,     slindexes=used_slindexes, fitkey=fitkey)
+        xy  = self.get_fitted_value("xy" ,     slindexes=used_slindexes, fitkey=fitkey)
 
         
         # Excluded because boundaries
         return  [np.average(ell), mad_std(ell)/np.sqrt(len(ell)-1),
-                     np.average(theta), mad_std(theta)]
+                     np.average(xy), mad_std(xy)]
         
-    def get_stddev_ratio(self, used_slindexes=None, fitkey=FITKEY):
+    def get_sigma_ratio(self, used_slindexes=None, fitkey=FITKEY):
         """ """
         from astropy.stats import mad_std
         if used_slindexes is None:
             used_slindexes = self.slindexes[~self.fetch_outlier()]
             
-        stddev_ratio    = self.get_fitted_value("stddev_ratio",  slindexes=used_slindexes, fitkey=fitkey)
-        return np.nanmean(stddev_ratio), mad_std(stddev_ratio)
+        sigma_ratio    = self.get_fitted_value("sigma_ratio",  slindexes=used_slindexes, fitkey=fitkey)
+        return np.nanmean(sigma_ratio), mad_std(sigma_ratio)
 
     def get_amplitude_ratio(self, used_slindexes=None, fitkey=FITKEY):
         """ """
@@ -241,28 +237,28 @@ class SlicePSFCollection( BaseObject ):
         amplitude_ratio    = self.get_fitted_value("amplitude_ratio",  slindexes=used_slindexes, fitkey=fitkey)
         return np.nanmean(amplitude_ratio), mad_std(amplitude_ratio)
 
-    def get_stddev_parameters(self, used_slindexes=None, fitkey=FITKEY, adjust_errors=True, intrinsic=0):
+    def get_sigma_parameters(self, used_slindexes=None, fitkey=FITKEY, adjust_errors=True, intrinsic=0):
         """ """
         if used_slindexes is None:
             used_slindexes = self.slindexes[~self.fetch_outlier()]
             
         from scipy.optimize import minimize
         lbdas      = self.get_fitted_value("lbda",        slindexes=used_slindexes, fitkey=fitkey)
-        stddev     = self.get_fitted_value("stddev",      slindexes=used_slindexes, fitkey=fitkey)
-        stddev_err = self.get_fitted_value("stddev.err",  slindexes=used_slindexes, fitkey=fitkey)
-        if intrinsic>0: stddev_err = np.sqrt(stddev_err**2 + intrinsic**2)
+        sigma     = self.get_fitted_value("sigma",      slindexes=used_slindexes, fitkey=fitkey)
+        sigma_err = self.get_fitted_value("sigma.err",  slindexes=used_slindexes, fitkey=fitkey)
+        if intrinsic>0: sigma_err = np.sqrt(sigma_err**2 + intrinsic**2)
             
         def _fmin_(param):
-            return np.nansum( np.sqrt((stddev-stddev_chromaticity(lbdas, *param))**2/stddev_err**2))
+            return np.nansum( np.sqrt((sigma-sigma_chromaticity(lbdas, *param))**2/sigma_err**2))
 
         
-        res  = minimize(_fmin_, [np.nanmedian(stddev), -1/5.], bounds=[[0.5,10], [-1,1]], options={"disp":0})
-        chi2_dof = res["fun"] / len(stddev-2)
+        res  = minimize(_fmin_, [np.nanmedian(sigma), -1/5.], bounds=[[0.5,10], [-1,1]], options={"disp":0})
+        chi2_dof = res["fun"] / len(sigma-2)
         if chi2_dof>3 and adjust_errors:
             print("Adjusting error")
             from pysedm.utils.tools import fit_intrinsic
-            intrinsic = fit_intrinsic(stddev, stddev_chromaticity(lbdas, *res["x"]), stddev_err, len(stddev-2), intrinsic_guess=None)
-            return self.get_stddev_parameters( used_slindexes=used_slindexes, fitkey=fitkey, adjust_errors=False,
+            intrinsic = fit_intrinsic(sigma, sigma_chromaticity(lbdas, *res["x"]), sigma_err, len(sigma-2), intrinsic_guess=None)
+            return self.get_sigma_parameters( used_slindexes=used_slindexes, fitkey=fitkey, adjust_errors=False,
                                         intrinsic = intrinsic/1.4)
         
         return res["x"]
@@ -567,7 +563,7 @@ class SlicePSFCollection( BaseObject ):
         #                 #
         #    Data         #
         #                 #
-        [mean_ell, mean_ellerr, mean_theta, mean_thetaerr]  = self.get_ellipse_parameters(used_slindexes=kept_slindexes)
+        [mean_ell, mean_ellerr, mean_xy, mean_xyerr]  = self.get_ellipse_parameters(used_slindexes=kept_slindexes)
         #                 #
         #    Axis         #
         #                 #
@@ -578,14 +574,14 @@ class SlicePSFCollection( BaseObject ):
 
         
         
-        fig = self._show_corner_( ["ell","theta"], fig=fig, labels=["ellipticity",r"Angle [rad]"],
-                                  expectation=[mean_ell, mean_theta] if show_model else None, expectation_err=[mean_ellerr, mean_thetaerr],
+        fig = self._show_corner_( ["ell","xy"], fig=fig, labels=["ellipticity",r"Angle [rad]"],
+                                  expectation=[mean_ell, mean_xy] if show_model else None, expectation_err=[mean_ellerr, mean_xyerr],
                                   used_slindexes = kept_slindexes,
                                   error_prop=error_prop, **scatter_prop )
         
         if np.any(mask_removed):
             scatter_prop_out = dict(s=20, zorder=4, facecolors="None", edgecolors="0.7")
-            fig = self._show_corner_( ["ell","theta"], fig=fig, labels=["ellipticity",r"Angle [rad]"],
+            fig = self._show_corner_( ["ell","xy"], fig=fig, labels=["ellipticity",r"Angle [rad]"],
                                   used_slindexes = rejected_slindexes, show_labels=False,
                                   error_prop=error_prop, **scatter_prop_out )
         
@@ -600,10 +596,10 @@ class SlicePSFCollection( BaseObject ):
         rejected_slindexes = np.asarray(used_slindexes)[mask_removed]
 
         if psfmodel in ["BiNormal"]:
-            profile_parameters = ["stddev","stddev_ratio","amplitude_ratio"]
+            profile_parameters = ["sigma","sigma_ratio","amplitude_ratio"]
             labels = ["Scale [std]",r"Scale ratio","Amplitude Ratio"]
         elif psfmodel in ["NormalMoffat", "MoffatNormal"]:
-            profile_parameters = ["stddev","alpha","amplitude_ratio"]
+            profile_parameters = ["sigma","alpha","amplitude_ratio"]
             labels = ["Scale [std]",r"Moffat $\alpha$","Amplitude Ratio"]
             show_model = False
         elif psfmodel in ["Moffat"]:
@@ -617,7 +613,7 @@ class SlicePSFCollection( BaseObject ):
         #                 #
         if show_model:
             amplitude_ratio, amplitude_ratioerr = self.get_amplitude_ratio( used_slindexes=kept_slindexes)
-            stddev_ratio, stddev_ratioerr       = self.get_stddev_ratio(    used_slindexes=kept_slindexes)
+            sigma_ratio, sigma_ratioerr       = self.get_sigma_ratio(    used_slindexes=kept_slindexes)
         #                 #
         #    Axis         #
         #                 #
@@ -629,8 +625,8 @@ class SlicePSFCollection( BaseObject ):
         fig = self._show_corner_( profile_parameters, fig=fig,
                                   labels=labels,
                                   used_slindexes = kept_slindexes,
-                                  expectation=[None,stddev_ratio, amplitude_ratio] if show_model else None,
-                                  expectation_err=[None,stddev_ratioerr, amplitude_ratioerr] if show_model else None,
+                                  expectation=[None,sigma_ratio, amplitude_ratio] if show_model else None,
+                                  expectation_err=[None,sigma_ratioerr, amplitude_ratioerr] if show_model else None,
                                   expectation_color=expectation_color,
                                   error_prop=error_prop, **scatter_prop )
 
@@ -646,10 +642,10 @@ class SlicePSFCollection( BaseObject ):
         if show_model:
             lbda = np.linspace(3000,10000,100)
             ax1 = fig.axes[0]
-            stddevref, rho = self.get_stddev_parameters(used_slindexes=used_slindexes)
-            ax1.plot(lbda, stddev_chromaticity(lbda, stddevref, rho=rho), color=expectation_color,
+            sigmaref, rho = self.get_sigma_parameters(used_slindexes=used_slindexes)
+            ax1.plot(lbda, sigma_chromaticity(lbda, sigmaref, rho=rho), color=expectation_color,
                          scalex=False)
-            ax1.plot(lbda, stddev_chromaticity(lbda, stddevref, rho=-1/5), color="0.5", ls="--", alpha=0.5, zorder=1,
+            ax1.plot(lbda, sigma_chromaticity(lbda, sigmaref, rho=-1/5), color="0.5", ls="--", alpha=0.5, zorder=1,
                          scalex=False)
             ax1.text(0.9,0.9, "rho=%.2f"%rho, color=expectation_color,
                          va="top",ha="right", transform = ax1.transAxes)
@@ -657,9 +653,9 @@ class SlicePSFCollection( BaseObject ):
     def show_adr(self, ax=None, **kwargs):
         """ """
         if 'AIRMASS' not in self.cube.header:
-            self.adrfitter.show(ax=ax, guess_airmass=-1.0, **kwargs)
+            return self.adrfitter.show(ax=ax, guess_airmass=-1.0, **kwargs)
         else:
-            self.adrfitter.show(ax=ax, guess_airmass=self.cube.header["AIRMASS"], **kwargs)
+            return self.adrfitter.show(ax=ax, guess_airmass=self.cube.header["AIRMASS"], **kwargs)
         
     # =================== #
     #   Internal          #
@@ -943,6 +939,7 @@ class SlicePSF( PSFFitter ):
         elif fit_area is not None:
             self.set_fit_area(fit_area)
         elif fitbuffer is not None:
+            import shapely
             self._set_fitted_values_()
             g = self.get_guesses() 
             x,y = self.model.centroid_guess
@@ -983,7 +980,7 @@ class SlicePSF( PSFFitter ):
     def show_psf(self, ax=None, show=True, savefile=None, nobkgd=True, **kwargs):
         """ """
         import matplotlib.pyplot as mpl
-        from .model import get_elliptical_distance
+        from .model import get_radial_distance
         if ax is None:
             fig = mpl.figure(figsize=[6,4])
             ax  = fig.add_axes([0.13,0.1,0.77,0.8])
@@ -991,10 +988,9 @@ class SlicePSF( PSFFitter ):
             fig = ax.figure
             
             
-        r_ellipse = get_elliptical_distance(self._xfitted, self._yfitted,
-                                                  xcentroid=self.fitvalues['xcentroid'],
-                                                  ycentroid=self.fitvalues['ycentroid'],
-                                                  ell=self.fitvalues['ell'], theta=self.fitvalues['theta'])
+        r_ellipse = get_radial_distance(self._xfitted, self._yfitted, xcentroid=self.fitvalues['xcentroid'],
+                                            ycentroid=self.fitvalues['ycentroid'],
+                                            yw=self.fitvalues['ell'], xy=self.fitvalues['xy'])
         if nobkgd:
             background = self.model.get_background(self._xfitted, self._yfitted)
             datashown = self._datafitted - background
@@ -1013,6 +1009,30 @@ class SlicePSF( PSFFitter ):
             fig.savefig(savefile)
         if show:
             fig.show()
+
+    def get_model(self):
+        """ """
+        from pyifu import get_slice
+        return get_slice(self.model.get_model(self._xfitted ,self._yfitted),
+                             np.asarray(self.slice.index_to_xy(self.fitted_indexes)),
+                                    spaxel_vertices=self.slice.spaxel_vertices, variance=None,
+                                    indexes=self.fitted_indexes)
+
+    def get_fitted_slice(self):
+        """ """
+        from pyifu import get_slice
+        return get_slice(self._datafitted,
+                             np.asarray(self.slice.index_to_xy(self.fitted_indexes)),
+                                    spaxel_vertices=self.slice.spaxel_vertices, variance=None,
+                                    indexes=self.fitted_indexes)
+
+    def get_residual_slice(self):
+        """ """
+        from pyifu import get_slice
+        return get_slice(self._datafitted - self.model.get_model(self._xfitted ,self._yfitted),
+                             np.asarray(self.slice.index_to_xy(self.fitted_indexes)),
+                                    spaxel_vertices=self.slice.spaxel_vertices, variance=None,
+                                    indexes=self.fitted_indexes)
         
     def show(self, savefile=None, show=True,
                  centroid_prop={}, logscale=True,psf_in_log=True, 
@@ -1035,18 +1055,11 @@ class SlicePSF( PSFFitter ):
         axpsf   = fig.add_axes([left+3*(width+space)+space*1.5, bottom, 0.955-(left+3*(width+space)+space), height])
 
         # = Data
-        slice_    = self.slice.data 
-        slice_var = self.slice.variance 
-        x,y       = np.asarray(self.slice.index_to_xy(self.slice.indexes)).T
-        model_    = self.model.get_model(x ,y)
-        model_slice = get_slice(model_, np.asarray(self.slice.index_to_xy(self.slice.indexes)),
-                                    spaxel_vertices=self.slice.spaxel_vertices, variance=None,
-                                    indexes=self.slice.indexes)
+        slice_    = self._datafitted
+        model_slice = self.get_model()
+        #x,y       = np.asarray(self.slice.index_to_xy(self.slice.indexes)).T
+        res_slice = self.get_residual_slice()
         
-        res_      = slice_ - model_
-        res_slice = get_slice(res_, np.asarray(self.slice.index_to_xy(self.slice.indexes)),
-                                    spaxel_vertices=self.slice.spaxel_vertices, variance=None,
-                                    indexes=self.slice.indexes)
         # = Plot
         self.slice.show( ax=axdata, vmin=vmin, vmax=vmax , show_colorbar=False, show=False, autoscale=True)
         model_slice.show( ax=axmodel, vmin=vmin, vmax=vmax , show_colorbar=False, show=False, autoscale=True )
@@ -1071,7 +1084,7 @@ class SlicePSF( PSFFitter ):
         fig.text(0.95,0.95, "model: %s"%self.model.NAME, fontsize="small",
                      va="top", ha="right")
         fig.figout(savefile=savefile, show=show)
-        
+        return fig
     # =================== #
     #  Properties         #
     # =================== #

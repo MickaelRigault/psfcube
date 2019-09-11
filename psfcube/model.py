@@ -7,6 +7,7 @@
 import numpy as np
 from scipy.stats import norm
 from scipy import integrate
+from scipy.special import gamma
 from modefit.baseobjects import BaseModel
 
 ################################
@@ -76,7 +77,8 @@ The profile should be normalize, but this is not mendatory.
 
 """
 def binormal_profile(x, y,
-                stddev, stddev_ratio, amplitude_ratio, theta, ell,
+                sigma, sigma_ratio, eta,
+                xy, ell,
                 xcentroid=0, ycentroid=0,
                 amplitude=1):
     """ Return the model profile.
@@ -88,19 +90,15 @@ def binormal_profile(x, y,
     array (model)
             
     """
+    print("BINORMAL NOT READY")
+    r = get_radial_distance(x, y, xcentroid=xcentroid, ycentroid=ycentroid,  yw=ell, xy=xy)
+    n1 = _normal_(r, scale=sigma) 
+    n2 = _normal_(r, scale=sigma*sigma_ratio)
     
-    r = get_elliptical_distance(x, y, xcentroid=xcentroid, ycentroid=ycentroid,  ell=ell, theta=theta)
-    
-    n1 = _normal_(r, scale=stddev)
-    n2 = _normal_(r, scale=stddev*stddev_ratio)
-
-    coef1 = amplitude_ratio/(1.+amplitude_ratio)
-    coef2 = 1./(1+amplitude_ratio)
-    
-    return amplitude * ( coef1 * n1 + coef2 * n2)
+    return amplitude * ( n1 + eta * n2)
 
 def moffat_profile(x, y, alpha, beta,
-                       theta, ell,
+                       xy, ell,
                        xcentroid=0, ycentroid=0,
                        amplitude=1):
     """ Return the model profile.
@@ -112,15 +110,17 @@ def moffat_profile(x, y, alpha, beta,
     -------
     array (model)
     """
-    r = get_elliptical_distance(x, y, xcentroid=xcentroid, ycentroid=ycentroid,  ell=ell, theta=theta)
+    print("MOFFAT NOT READY")    
+    r = get_radial_distance(x, y, xcentroid=xcentroid, ycentroid=ycentroid,  yw=ell, xy=xy)
     n1 = _moffat_(r, alpha, beta)
     return amplitude * ( n1 )
 
 
 def normalmoffat_profile(x, y,
-                        stddev, alpha, amplitude_ratio, theta, ell,
+                        sigma, alpha, eta, xy, ell,
                         xcentroid=0, ycentroid=0,
-                        amplitude=1):
+                        amplitude=1,
+                        split=False, radius=None):
     """ Return the model profile.
     Here a normal + moffat profile.
     if decomposed
@@ -128,49 +128,45 @@ def normalmoffat_profile(x, y,
     Returns
     -------
     array (model)
+    or amplitude, normalization*moffat, eta * normalization*normal
     """
+    if x is None and y is None and radius is not None:
+        r = radius
+    else:
+        r = get_radial_distance(x, y, xcentroid=xcentroid, ycentroid=ycentroid,  yw=ell, xy=xy)
     
-    r = get_elliptical_distance(x, y, xcentroid=xcentroid, ycentroid=ycentroid,  ell=ell, theta=theta)
-    n1 = _normal_(r, scale=stddev) 
-    n2 = _moffat_(r, alpha, beta=2.5) 
-
-    coef1 = amplitude_ratio/(1.+amplitude_ratio)
-    coef2 = 1./(1+amplitude_ratio)
+    beta = _alpha_to_beta_(alpha)
+    normal = _normal_(r, scale=sigma) 
+    moffat = _moffat_(r, alpha, beta=beta) 
     
-    return amplitude * ( coef1 * n1 + coef2 * n2 )
+    normalization = np.sqrt(ell - xy**2)/( np.pi * (2 * eta * sigma**2 + alpha**2 / (beta - 1)) )
+    if split:
+        return amplitude, normalization*moffat, normalization*eta * normal
+    
+    return amplitude * normalization* ( moffat + eta * normal )
 
-def _alpha_to_stddev_(alpha, sigma0=-0.1, sigma1=1.4 ):
-    """ """
-    return sigma0+alpha*sigma1
+
+
+
+
+
+
 
 def _alpha_to_beta_(alpha, b0=0.25, b1=0.63):
     """ Ratio given by SNIFS """
     return b0+alpha*b1
 
 # Profiles 
-def _normal_(r, scale):
+def _normal_(r, scale, normed=False):
     """ """
+    if not normed:
+        return norm.pdf(r, loc=0, scale=scale) * np.sqrt(2*np.pi*scale**2) # unnormalized
     return norm.pdf(r, loc=0, scale=scale)
 
-def _moffat_manual_normed_(r, alpha, beta):
-    """ Manual renormalization. """
-    return  1/(2*_default_moffat_normalization_(alpha)) * (1 + (r/alpha)**2 )**(-beta)
-
-def _moffat_(r, alpha, beta):
+def _moffat_(r, alpha, beta, normed=False):
     """ """
-    return  2*(beta-1)/alpha**2 * (1 + (r/alpha)**2 )**(-beta)
-
-
-# profile_normalization
-def _default_moffat_normalization_(alpha):
-    """ To be used when using _alpha_to_beta_ """
-    coefs = [1.6532341084340385,
-                 0.0572839305590741,
-                 0.08240094225731157,
-                 -0.01578126134847564,
-                 0.0013096135691818885,
-                 -4.1053249828530274e-05]
-    return np.dot([1,alpha,alpha**2, alpha**3, alpha**4, alpha**5],coefs)
+    norm =  2*(beta-1)/alpha**2 if normed else 1
+    return norm * (1 + (r/alpha)**2 )**(-beta)
 
 
 
@@ -215,7 +211,7 @@ def get_normalmoffat_normalisation( param_profile,
     float, float 
          [normalisation, estimated error]
     """
-    args = [param_profile[k] for k in ["stddev", "alpha", "amplitude_ratio", "theta", "ell", "xcentroid", "ycentroid"]]
+    args = [param_profile[k] for k in ["sigma", "alpha", "eta", "xy", "ell", "xcentroid", "ycentroid"]]
     return integrate.dblquad(normalmoffat_profile,
                                  param_profile["xcentroid"]-xbounds, param_profile["xcentroid"]+xbounds,
                                  gfun = lambda x:  param_profile["ycentroid"]-ybounds,
@@ -246,7 +242,31 @@ def curved_plane(x, y,
 #  Ellipticity              #
 #                           #
 # ========================= #
-def get_elliptical_distance(x, y, xcentroid=0, ycentroid=0, ell=0, theta=0):
+def get_radial_distance(x, y, xcentroid=0, ycentroid=0, yw=0, xy=0):
+    """ 
+    Parameters
+    ----------
+    x,y: [array]
+        Cartesian Coordinates
+
+    x0,y0: [float] -optional-
+        Cartesian coordinate of the ellipse center
+        
+    ell: [float] -optional-
+        similar to ellipticity, it is the coef in front of y (and not x)
+        
+    xy: [float] -optional-
+        similar to angle, it is the coef in from of 2*x*y
+    
+    Returns
+    -------
+    radial distance in elliptical coordinates
+    """
+    dx, dy = (x-xcentroid), (y-ycentroid)
+    return np.sqrt(dx**2 + yw * dy**2 + 2 * xy *dx*dy)
+    
+    
+def get_elliptical_distance(x, y, xcentroid=0, ycentroid=0, ell=0, xy=0):
     """
     Parameters
     ----------
@@ -259,14 +279,14 @@ def get_elliptical_distance(x, y, xcentroid=0, ycentroid=0, ell=0, theta=0):
     ell: [float] -optional-
         Ellipticity [0<ell<1[
         
-    theta: [float] -optional-
+    xy: [float] -optional-
         Angle of the ellipse [radian]
     
     Returns
     -------
     array for float (elliptical distance)
     """
-    c, s  = np.cos(theta), np.sin(theta)
+    c, s  = np.cos(xy), np.sin(xy)
     rot   = np.asarray([[c, s], [-s, c]])
     xx,yy = np.dot(rot, np.asarray([x-xcentroid, y-ycentroid]))
     return np.sqrt(xx**2 + (yy/(1-ell))**2)
@@ -325,6 +345,14 @@ class _PSFSliceModel_( BaseModel ):
         """ the profile + background model. """
         return self.get_profile(x,y) + self.get_background(x,y)
 
+    def get_radial_distance(self, x, y):
+        """ """
+        return get_radial_distance(x, y,
+                                xcentroid=self.param_profile["xcentroid"],
+                                ycentroid=self.param_profile["ycentroid"],
+                                yw=self.param_profile["ell"],
+                                xy=self.param_profile["xy"])
+    
     # - To Be Defined
     def get_profile(self, x, y):
         """ The profile at the given positions """
@@ -336,7 +364,7 @@ class _PSFSliceModel_( BaseModel ):
 
     def get_radial_profile(self, radius):
         """ """
-        raise NotImplementedError("You must define the get_background")
+        return self.get_profile(None, None, radius=radius)
 
     # ================ #
     #  Properties      #
@@ -345,7 +373,6 @@ class _PSFSliceModel_( BaseModel ):
     def fwhm(self):
         """ assuming the get_radial_profile(), this is *twice the radius needed to reach half the centroid flux (in unit of x,y) 
         *Careful, does not account for ellipticity if any*
-
         ```python
         rmodel = np.linspace(0,20,1000)
         rspec = self.get_radial_profile(rmodel)
@@ -355,7 +382,6 @@ class _PSFSliceModel_( BaseModel ):
         rmodel = np.linspace(0,20,1000)
         rspec = self.get_radial_profile(rmodel)
         return rmodel[np.argmin(np.abs(rspec-rspec[0]/2.))]
-        
 # ======================================= #
 #                                         #
 #  BiNormal + Background    Models        #
@@ -366,8 +392,8 @@ class BiNormalFlat( _PSFSliceModel_ ):
     """ """
     NAME = "binormal-flat"
     PROFILE_PARAMETERS = ["amplitude",
-                          "stddev", "stddev_ratio", "amplitude_ratio",
-                          "theta", "ell",
+                          "sigma", "sigma_ratio", "eta",
+                          "xy", "ell",
                           "xcentroid", "ycentroid"]
     
     BACKGROUND_PARAMETERS = ["bkgd"]
@@ -398,7 +424,7 @@ class BiNormalFlat( _PSFSliceModel_ ):
         self._guess = dict( amplitude_guess=ampl * 5,
                             amplitude_boundaries= [None, None],
                             # - background
-                            bkgd_guess=background, bkgd_boundaries=[None, np.percentile(data,99.9)],
+                            bkgd_guess=background, bkgd_boundaries=[0, np.percentile(data,99.9)],
                             # centroid
                             xcentroid_guess=xcentroid, xcentroid_boundaries=[xcentroid-xcentroid_err, xcentroid+xcentroid_err],
                             ycentroid_guess=ycentroid, ycentroid_boundaries=[ycentroid-ycentroid_err, ycentroid+ycentroid_err],
@@ -406,45 +432,34 @@ class BiNormalFlat( _PSFSliceModel_ ):
                             # SEDM DEFAULT VARIABLES   #
                             # ------------------------ #
                             # Ellipticity
-                            ell_guess=0.05, ell_boundaries=[0,0.4], ell_fixed=False,
-                            theta_guess=1.5, theta_boundaries=[0,np.pi], theta_fixed=False,
+                            ell_guess=1, ell_boundaries=[0.2,5],   ell_fixed=False,
+                            xy_guess=0, xy_boundaries=[-0.6, 0.6], xy_fixed=False,
                             # Size
-                            stddev_guess = 1.3,
-                            stddev_boundaries=[0.5, 5],
-                            stddev_ratio_guess=2.,
-                            stddev_ratio_boundaries=[1.1, 4],
-                            stddev_ratio_fixed=False,
+                            sigma_guess = 1.3,
+                            sigma_boundaries=[0.5, 5],
+                            sigma_ratio_guess=2.,
+                            sigma_ratio_boundaries=[1.1, 4],
+                            sigma_ratio_fixed=False,
                             # Converges faster by allowing degenerated param...
                             # amplitude ratio
-                            amplitude_ratio_guess = 3,
-                            amplitude_ratio_fixed = False,
-                            amplitude_ratio_boundaries = [1.5,5],
+                            eta_guess = 3,
+                            eta_fixed = False,
+                            eta_boundaries = [1.5,5],
                            )
         return self._guess
 
     # ================== #
     #  Model             #
     # ================== #
-    def get_profile(self, x, y):
+    def get_profile(self, x, y, **kwargs):
         """ """
-        return binormal_profile(x, y, **self.param_profile)
+        return binormal_profile(x, y, **{**self.param_profile,**kwargs})
     
     def get_background(self,x,y):
         """ The background at the given positions """
         return self.param_background["bkgd"]
 
-    
-    def get_radial_profile(self, radius):
-        """ No background by definition """
-        n1 = _normal_(radius, scale=self.param_profile['stddev'])
-        n2 = _normal_(radius,scale=self.param_profile['stddev']*self.param_profile['stddev_ratio'])
-
-        coef1 = self.param_profile['amplitude_ratio']/(1.+self.param_profile['amplitude_ratio'])
-        coef2 = 1./(1+self.param_profile['amplitude_ratio'])
-
-        amplitude = self.param_profile['amplitude']
-        return  (n2*coef2+n1*coef1)*amplitude
-    
+        
     def display_model(self, ax, rmodel, legend=True,
                           nobkgd=True,
                           cmodel = "C1",
@@ -452,16 +467,13 @@ class BiNormalFlat( _PSFSliceModel_ ):
                           cbkgd="k", zorder=7, **kwargs):
         """ """
         # the decomposed binormal_profile
-        n1 = _normal_(rmodel, scale=self.param_profile['stddev'])
-        n2 = _normal_(rmodel, scale=self.param_profile['stddev']*self.param_profile['stddev_ratio'])
-
-        coef1 = self.param_profile['amplitude_ratio']/(1.+self.param_profile['amplitude_ratio'])
-        coef2 = 1./(1+self.param_profile['amplitude_ratio'])
+        n1 = _normal_(rmodel, scale=self.param_profile['sigma'])
+        n2 = _normal_(rmodel, scale=self.param_profile['sigma']*self.param_profile['sigma_ratio'])
 
         amplitude = self.param_profile['amplitude']
         # and its background
         background = 0 if nobkgd else self.param_background['bkgd']
-
+        
         # - display background
         if not nobkgd:
             ax.axhline(background, ls=":",color=cbkgd, label="background",zorder=zorder)
@@ -472,7 +484,7 @@ class BiNormalFlat( _PSFSliceModel_ ):
         ax.plot(rmodel, background + n2*coef2*amplitude, ls="-.",color=cgaussian2, label="Tail Gaussian",zorder=zorder,
                     **kwargs)
         # - display full model
-        ax.plot(rmodel, background + (n2*coef2+n1*coef1)*amplitude, 
+        ax.plot(rmodel, background + (n2+n1*eta)*amplitude, 
                     ls="-",color=cmodel,zorder=zorder+1, lw=2, label="PSF Model",
                     **kwargs)
 
@@ -524,11 +536,13 @@ class MoffatFlat( _PSFSliceModel_ ):
     NAME = "moffat-flat"
     PROFILE_PARAMETERS = ["amplitude",
                           "alpha",  "beta",
-                          "theta", "ell",
+                          "xy", "ell",
                           "xcentroid", "ycentroid"]
     
     BACKGROUND_PARAMETERS = ["bkgd"]
-    
+
+    beta_guess = 2.5
+    beta_fixed = True
     # ================== #
     #  Guess             #
     # ================== #
@@ -564,8 +578,8 @@ class MoffatFlat( _PSFSliceModel_ ):
                             # SEDM DEFAULT VARIABLES   #
                             # ------------------------ #
                             # Ellipticity
-                            ell_guess=0.05, ell_boundaries=[0,0.4], ell_fixed=False,
-                            theta_guess=1.5, theta_boundaries=[0,np.pi], theta_fixed=False,
+                            ell_guess=1, ell_boundaries=[0.2,5],   ell_fixed=False,
+                            xy_guess=0, xy_boundaries=[-0.6, 0.6], xy_fixed=False,
                             # Size
                             # moffat
                             alpha_guess=4.,
@@ -584,20 +598,13 @@ class MoffatFlat( _PSFSliceModel_ ):
         """ If you need to return prior value. Do so here. """
         return 0
 
-    def get_profile(self, x, y):
+    def get_profile(self, x, y, **kwargs):
         """ """
-        return moffat_profile(x, y, **self.param_profile)
+        return moffat_profile(x, y,  **{**self.param_profile,**kwargs})
     
     def get_background(self,x,y):
         """ The background at the given positions """
         return self.param_background["bkgd"]
-
-
-    def get_radial_profile(self, radius):
-        """ No background by definition """
-        n1 = _moffat_(radius, alpha=self.param_profile['alpha'], beta=self.param_profile['beta'])
-        amplitude = self.param_profile['amplitude']
-        return n1*amplitude
     
     def display_model(self, ax, rmodel, legend=True,
                           nobkgd=True,
@@ -672,9 +679,8 @@ class NormalMoffatFlat( _PSFSliceModel_ ):
     """ """
     NAME = "normal/moffat-flat"
     PROFILE_PARAMETERS = ["amplitude",
-                          "alpha", "amplitude_ratio",
-                          "stddev", 
-                          "theta", "ell",
+                          "alpha", "eta", "sigma", 
+                          "xy", "ell",
                           "xcentroid", "ycentroid"]
     
     BACKGROUND_PARAMETERS = ["bkgd"]
@@ -705,7 +711,7 @@ class NormalMoffatFlat( _PSFSliceModel_ ):
         self._guess = dict( amplitude_guess=ampl * 5,
                             amplitude_boundaries= [None, None],
                             # - background
-                            bkgd_guess=background, bkgd_boundaries=[None, np.percentile(data,99.9)],
+                            bkgd_guess=background, bkgd_boundaries=[0, np.percentile(data,99.9)],
                             # centroid
                             xcentroid_guess=xcentroid, xcentroid_boundaries=[xcentroid-xcentroid_err, xcentroid+xcentroid_err],
                             ycentroid_guess=ycentroid, ycentroid_boundaries=[ycentroid-ycentroid_err, ycentroid+ycentroid_err],
@@ -713,11 +719,11 @@ class NormalMoffatFlat( _PSFSliceModel_ ):
                             # SEDM DEFAULT VARIABLES   #
                             # ------------------------ #
                             # Ellipticity
-                            ell_guess=0.05, ell_boundaries=[0,0.4], ell_fixed=False,
-                            theta_guess=1.5, theta_boundaries=[0,np.pi], theta_fixed=False,
+                            ell_guess=1, ell_boundaries=[0.2,5],   ell_fixed=False,
+                            xy_guess=0, xy_boundaries=[-0.6, 0.6], xy_fixed=False,
                             # Size
-                            stddev_guess = 1.3,
-                            stddev_boundaries=[1., 2],
+                            sigma_guess = 1.3,
+                            sigma_boundaries=[1., 2],
                             # moffat
                             alpha_guess=8.,
                             alpha_boundaries=[2., 15.],
@@ -725,9 +731,9 @@ class NormalMoffatFlat( _PSFSliceModel_ ):
                             #beta_boundaries=[0., None],
                             # Converges faster by allowing degenerated param...
                             # amplitude ratio
-                            amplitude_ratio_guess = 2,
-                            amplitude_ratio_fixed = False,
-                            amplitude_ratio_boundaries = [0.1,10],
+                            eta_guess = 2,
+                            eta_fixed = False,
+                            eta_boundaries = [0.1,10],
                            )
         return self._guess
 
@@ -738,27 +744,13 @@ class NormalMoffatFlat( _PSFSliceModel_ ):
         """ If you need to return prior value. Do so here. """
         return 0
 
-    def get_profile(self, x, y):
+    def get_profile(self, x, y, **kwargs):
         """ """
-        return normalmoffat_profile(x, y, **self.param_profile)
+        return normalmoffat_profile(x, y, **{**self.param_profile,**kwargs})
     
     def get_background(self,x,y):
         """ The background at the given positions """
         return self.param_background["bkgd"]
-
-
-    def get_radial_profile(self, radius):
-        """ No background by definition """
-        n1 = _normal_(radius,  scale=self.param_profile['stddev'])
-        n2 = _moffat_(radius, alpha=self.param_profile['alpha'],
-                          beta=_alpha_to_beta_(self.param_profile['alpha']))
-
-        coef1 = self.param_profile['amplitude_ratio']/(1.+self.param_profile['amplitude_ratio'])
-        coef2 = 1./(1+self.param_profile['amplitude_ratio'])
-
-        amplitude = self.param_profile['amplitude']
-        return (n2*coef2+n1*coef1)*amplitude
-
         
     def display_model(self, ax, rmodel, legend=True,
                           nobkgd=True,
@@ -766,14 +758,9 @@ class NormalMoffatFlat( _PSFSliceModel_ ):
                           cgaussian1 = "C0",cgaussian2 = "C2",
                           cbkgd="k", zorder=7, **kwargs):
         """ """
-        # the decomposed binormal_profile
-        n1 = _normal_(rmodel,  scale=self.param_profile['stddev'])
-        n2 = _moffat_(rmodel, alpha=self.param_profile['alpha'], beta=_alpha_to_beta_(self.param_profile['alpha']))
-
-        coef1 = self.param_profile['amplitude_ratio']/(1.+self.param_profile['amplitude_ratio'])
-        coef2 = 1./(1+self.param_profile['amplitude_ratio'])
-
-        amplitude = self.param_profile['amplitude']
+        
+        amplitude, normed_moffat, normed_normal = normalmoffat_profile(None, None, radius=rmodel, split=True, **self.param_profile)
+        
         # and its background
         background = 0 if nobkgd else self.param_background['bkgd']
 
@@ -782,12 +769,12 @@ class NormalMoffatFlat( _PSFSliceModel_ ):
             ax.axhline(background, ls=":",color=cbkgd, label="background",zorder=zorder)
         
         # - display details
-        ax.plot(rmodel, background + n1*coef1*amplitude, ls="-.",color=cgaussian1, label="Core Gaussian",zorder=zorder,
+        ax.plot(rmodel, background + amplitude*normed_normal, ls="-.",color=cgaussian1, label="Gaussian",zorder=zorder,
                     **kwargs)
-        ax.plot(rmodel, background + n2*coef2*amplitude, ls="-.",color=cgaussian2, label="Tail Moffat",zorder=zorder,
+        ax.plot(rmodel, background + amplitude*normed_moffat, ls="-.",color=cgaussian2, label="Moffat",zorder=zorder,
                     **kwargs)
         # - display full model
-        ax.plot(rmodel, background + (n2*coef2+n1*coef1)*amplitude, 
+        ax.plot(rmodel, (normed_normal+normed_moffat)*amplitude, 
                     ls="-",color=cmodel,zorder=zorder+1, lw=2, label="PSF Model",
                     **kwargs)
 

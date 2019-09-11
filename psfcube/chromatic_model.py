@@ -10,9 +10,9 @@ LBDAREF = 7000
 #  Chromaticity             #
 #                           #
 # ========================= #
-def stddev_chromaticity(lbda, stddevref, rho=-1/5., lbdaref=7000):
+def sigma_chromaticity(lbda, sigmaref, rho=-1/5., lbdaref=7000):
     """ Evolution of the standard deviation as a function of lbda. """
-    return stddevref * (lbda / lbdaref)**(rho)
+    return sigmaref * (lbda / lbdaref)**(rho)
 
 #############################
 #                           #
@@ -67,18 +67,20 @@ class ADRModel( BaseObject ):
 
 class ChromaticNormalMoffat( BaseObject ):
     """ """
-    PROPERTIES = ["stddev","alpha", "amplitude_ratio","lbda",
+    PROPERTIES = ["sigma","alpha", "eta","lbda",
                       "adrmodel"]
 
     # ==================== #
     #  Methods             #
     # ==================== #
-    def force_fit(self, cube, psfmodel="NormalMoffatCurved",
+    def force_fit(self, cube,
+                      psfmodel="NormalMoffatCurved",
                       slice_width=None,
-                      ell=None, theta=None, ellerr=None, thetaerr=None,
+                      ell=None, xy=None,
+                      ellerr=None, xyerr=None,
                       force_ellipse=True,
                       force_centroid=True,
-                      force_stddev=True,force_alpha=True):
+                      force_sigma=True,force_alpha=True):
         """ 
         slice_width: [int/None]
             How may lbda-slices array do you combine.
@@ -102,39 +104,39 @@ class ChromaticNormalMoffat( BaseObject ):
                 lbda_min = lbda_min[:len(lbda_max)]
             lbdas = np.mean([lbda_min,lbda_max], axis=0)
 
-        stddev_lbdas = self.get_stddev(lbdas)
+        sigma_lbdas = self.get_sigma(lbdas)
 
         # Moffat
         achromatic_moffat_alpha = self.get_moffat_alpha(False)
-        amplitude_ratio = np.nanmean(self.amplitude_ratio)
-        amplitude_ratioerr = mad_std(self.amplitude_ratio)*2
+        eta = np.nanmean(self.eta)
+        etaerr = mad_std(self.eta)*2
         profile_lbda = {"alpha_guess":achromatic_moffat_alpha[0],
                         "alpha_fixed": force_alpha,
                         "alpha_boundaries":[achromatic_moffat_alpha[0]-0.2,achromatic_moffat_alpha[0]+0.2],
                         "centroids_err":[0.05,0.05],
                         "force_centroid":force_centroid,
-                        "stddev_fixed":force_stddev,
-                        "amplitude_ratio_guess": np.nanmean(self.amplitude_ratio),
-                        "amplitude_ratio_boundaries": [np.nanmax([0.1,amplitude_ratio-amplitude_ratioerr]), amplitude_ratio+amplitude_ratioerr]
+                        "sigma_fixed":force_sigma,
+                        "eta_guess": np.nanmean(self.eta),
+                        "eta_boundaries": [np.nanmax([0.1,eta-etaerr]), eta+etaerr]
                         }
         # Ellipse
         if ell is not None:
             profile_lbda["ell_guess"] = ell
             if ellerr is not None: profile_lbda["ell_boundaries"] = [ell-ellerr, ell+ellerr]
-        if theta is not None:
-            profile_lbda["theta_guess"] = theta
-            if thetaerr is not None: profile_lbda["theta_boundaries"] = [theta-thetaerr, theta+thetaerr]
+        if xy is not None:
+            profile_lbda["xy_guess"] = xy
+            if xyerr is not None: profile_lbda["xy_boundaries"] = [xy-xyerr, xy+xyerr]
                 
-        if ell is not None and theta is not None and force_ellipse:
-            profile_lbda["ell_fixed"]      = True
-            profile_lbda["theta_fixed"]    = True
+        if ell is not None and xy is not None and force_ellipse:
+            profile_lbda["ell_fixed"] = True
+            profile_lbda["xy_fixed"]  = True
         # 
         # => All Slices
         #
         if slice_width is None:
             for i, l_ in enumerate(cube.lbda):
-                profile_lbda["stddev_guess"]      = stddev_lbdas[i]
-                profile_lbda["stddev_boundaries"] = [stddev_lbdas[i]-0.1,stddev_lbdas[i]+0.1]
+                profile_lbda["sigma_guess"]      = sigma_lbdas[i]
+                profile_lbda["sigma_boundaries"] = [sigma_lbdas[i]-0.1,sigma_lbdas[i]+0.1]
                 # Centroid
                 profile_lbda["centroids"]      = self.get_position(l_)
                 if i%40 == 0:
@@ -146,8 +148,8 @@ class ChromaticNormalMoffat( BaseObject ):
         #
         else:
             for i, l_ in  enumerate(zip(lbda_min,lbda_max)):
-                profile_lbda["stddev_guess"]      = stddev_lbdas[i]
-                profile_lbda["stddev_boundaries"] = [stddev_lbdas[i]-0.1,stddev_lbdas[i]+0.1]
+                profile_lbda["sigma_guess"]      = sigma_lbdas[i]
+                profile_lbda["sigma_boundaries"] = [sigma_lbdas[i]-0.1,sigma_lbdas[i]+0.1]
                 # Centroid
                 profile_lbda["centroids"]      = self.get_position(np.mean(l_))
                 if i%10 == 0:
@@ -164,10 +166,10 @@ class ChromaticNormalMoffat( BaseObject ):
         """ """
         return self.adrmodel.get_centroid(lbda)
     
-    def get_stddev(self, lbda, lbdaref=LBDAREF):
+    def get_sigma(self, lbda, lbdaref=LBDAREF):
         """ """
-        stddevref, rho = self.fit_stddev_parameters()
-        return stddev_chromaticity(lbda, stddevref, rho=rho, lbdaref=lbdaref)
+        sigmaref, rho = self.fit_sigma_parameters()
+        return sigma_chromaticity(lbda, sigmaref, rho=rho, lbdaref=lbdaref)
     
     def get_moffat_alpha(self, weighted_mean=True):
         """ """
@@ -185,38 +187,38 @@ class ChromaticNormalMoffat( BaseObject ):
         self._properties["adrmodel"] = adrmodel
 
         
-    def set_data(self, stddev, alpha, amplitude_ratio, lbda,
-                     stddev_err=None, alpha_err=None, amplitude_ratio_err=None):
+    def set_data(self, sigma, alpha, eta, lbda,
+                     sigma_err=None, alpha_err=None, eta_err=None):
         """ """
-        self._properties["stddev"]              = stddev
+        self._properties["sigma"]              = sigma
         self._properties["alpha"]               = alpha
-        self._properties["amplitude_ratio"]     = amplitude_ratio
-        self._properties["stddev_err"]          = stddev_err
+        self._properties["eta"]     = eta
+        self._properties["sigma_err"]          = sigma_err
         self._properties["alpha_err"]           = alpha_err
-        self._properties["amplitude_ratio_err"] = amplitude_ratio_err
+        self._properties["eta_err"] = eta_err
         
         self._properties["lbda"]            = lbda
 
     # --------- #
     #  FITTER   #
     # --------- #
-    def fit_stddev_parameters(self, adjust_errors=True, intrinsic=0):
+    def fit_sigma_parameters(self, adjust_errors=True, intrinsic=0):
         """ """
         from scipy.optimize import minimize
-        stddev_err = self.stddev_err if self.stddev_err is not None else 1.
-        if intrinsic>0: stddev_err = np.sqrt(stddev_err**2 + intrinsic**2)
+        sigma_err = self.sigma_err if self.sigma_err is not None else 1.
+        if intrinsic>0: sigma_err = np.sqrt(sigma_err**2 + intrinsic**2)
         
         def _fmin_(param): 
-            return np.nansum( np.sqrt((self.stddev-stddev_chromaticity(self.lbda, *param))**2/stddev_err**2))
+            return np.nansum( np.sqrt((self.sigma-sigma_chromaticity(self.lbda, *param))**2/sigma_err**2))
 
-        res  = minimize(_fmin_, [np.nanmedian(self.stddev), -1/5.], bounds=[[0.5,10], [-1,1]], options={"disp":0})
-        if self.stddev_err is not None:
-            chi2_dof = res["fun"] / len(self.stddev-2)
+        res  = minimize(_fmin_, [np.nanmedian(self.sigma), -1/5.], bounds=[[0.5,10], [-1,1]], options={"disp":0})
+        if self.sigma_err is not None:
+            chi2_dof = res["fun"] / len(self.sigma-2)
             if chi2_dof>3 and adjust_errors:
                 print("Adjusting error")
                 from pysedm.utils.tools import fit_intrinsic
-                intrinsic = fit_intrinsic(self.stddev, stddev_chromaticity(self.lbda, *res["x"]), self.stddev_err, len(self.stddev-2), intrinsic_guess=None)
-                return self.fit_stddev_parameters( adjust_errors=False, intrinsic = intrinsic/1.4)
+                intrinsic = fit_intrinsic(self.sigma, sigma_chromaticity(self.lbda, *res["x"]), self.sigma_err, len(self.sigma-2), intrinsic_guess=None)
+                return self.fit_sigma_parameters( adjust_errors=False, intrinsic = intrinsic/1.4)
         
         return res["x"]
     
@@ -226,9 +228,9 @@ class ChromaticNormalMoffat( BaseObject ):
     
     # - PSF Properties
     @property
-    def stddev(self):
+    def sigma(self):
         """ """
-        return self._properties["stddev"]
+        return self._properties["sigma"]
 
     @property
     def alpha(self):
@@ -236,14 +238,14 @@ class ChromaticNormalMoffat( BaseObject ):
         return self._properties["alpha"]
 
     @property
-    def amplitude_ratio(self):
+    def eta(self):
         """ """
-        return self._properties["amplitude_ratio"]
+        return self._properties["eta"]
 
     @property
-    def stddev_err(self):
+    def sigma_err(self):
         """ """
-        return self._properties["stddev_err"]
+        return self._properties["sigma_err"]
 
     @property
     def alpha_err(self):
@@ -251,9 +253,9 @@ class ChromaticNormalMoffat( BaseObject ):
         return self._properties["alpha_err"]
 
     @property
-    def amplitude_ratio_err(self):
+    def eta_err(self):
         """ """
-        return self._properties["amplitude_ratio_err"]
+        return self._properties["eta_err"]
     
     
     @property
