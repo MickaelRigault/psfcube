@@ -52,12 +52,12 @@ def extract_star(cube, lbda_step1=None, psfmodel="NormalMoffatTilted",
     # Step 2
 
     # ellipse_parameters
-    ell, ellerr, xy, xyerr = psffit.get_ellipse_parameters()
+    ab, aberr, theta, thetaerr = psffit.get_ellipse_parameters()
     
     cmodel = psffit.get_chromatic_profile_model()
     
-    slfits = cmodel.force_fit(cube, ell=ell, xy=xy,
-                                  ellerr=ellerr*2, xyerr=xyerr*2,
+    slfits = cmodel.force_fit(cube, ab=ab, theta=theta,
+                                  aberr=aberr*2, thetaerr=thetaerr*2,
                                   psfmodel=psfmodel,
                                   force_ellipse=force_ellipse,
                                   force_centroid=force_centroid,
@@ -186,7 +186,7 @@ def automatic_fit_psf(cube, centroids=[0,0],
                         centroids_err=[3,3],
                         psfmodel="NormalMoffatTilted", step_bins=[3,10]):
     """ """
-    prop_fit = dict(ell_boundaries=[0.01,0.5])
+    prop_fit = dict(ab_boundaries=[0.01,0.5])
     # ================== #
     # Step 1: 5 slices  #
     #  All Free          #
@@ -213,7 +213,7 @@ def automatic_fit_psf(cube, centroids=[0,0],
     #  Strong centroid   #
     # ================== #
     # - Helping on the ellipticity
-    [mean_ell, mean_ellerr, mean_xy, mean_xyerr], mask_removed  = psffit_step1.get_ellipse_parameters()
+    [mean_ab, mean_aberr, mean_theta, mean_thetaerr], mask_removed  = psffit_step1.get_ellipse_parameters()
     stddev_ratio,stddev_ratioerr = psffit_step1.get_stddev_ratio()
     
     STEP2_LBDA_RANGE = np.linspace(4500,8000, step_bins[1]+1)
@@ -223,11 +223,11 @@ def automatic_fit_psf(cube, centroids=[0,0],
     psffit_step2 = SlicePSFCollection()
     psffit_step2.set_cube(cube)
 
-    prop_fit["ell_guess"] = mean_ell
-    prop_fit["ell_boundaries"] = [mean_ell-mean_ellerr, mean_ell+mean_ellerr]
+    prop_fit["ab_guess"] = mean_ab
+    prop_fit["ab_boundaries"] = [mean_ab-mean_aberr, mean_ab+mean_aberr]
 
-    prop_fit["xy_guess"] = mean_xy
-    prop_fit["xy_boundaries"] = [mean_xy-mean_xyerr, mean_xy+mean_xyerr]
+    prop_fit["theta_guess"] = mean_theta
+    prop_fit["theta_boundaries"] = [mean_theta-mean_thetaerr, mean_theta+mean_thetaerr]
 
     prop_fit["stddev_ratio_guess"] = stddev_ratio
     prop_fit["stddev_ratio_boundaries"] = [stddev_ratio-stddev_ratioerr, stddev_ratio+stddev_ratioerr]

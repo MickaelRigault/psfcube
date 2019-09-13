@@ -181,15 +181,15 @@ class SlicePSFCollection( BaseObject ):
         return cmodel
         
     # = fetch Outlier
-    def fetch_outlier(self, used_slindexes=None, fitkey=FITKEY, ell_exclusion_to_zero=0.05):
+    def fetch_outlier(self, used_slindexes=None, fitkey=FITKEY, ab_exclusion_to_zero=0.05):
         """ """
         from astropy.stats import mad_std
-        ell    = self.get_fitted_value("ell",        slindexes=used_slindexes, fitkey=fitkey)
-        ellerr = self.get_fitted_value("ell.err",        slindexes=used_slindexes, fitkey=fitkey)
-        xy  = self.get_fitted_value("xy" ,     slindexes=used_slindexes, fitkey=fitkey)
-        xyerr = self.get_fitted_value("xy.err",        slindexes=used_slindexes, fitkey=fitkey)
+        ab    = self.get_fitted_value("ab",        slindexes=used_slindexes, fitkey=fitkey)
+        aberr = self.get_fitted_value("ab.err",        slindexes=used_slindexes, fitkey=fitkey)
+        theta  = self.get_fitted_value("theta" ,     slindexes=used_slindexes, fitkey=fitkey)
+        thetaerr = self.get_fitted_value("theta.err",        slindexes=used_slindexes, fitkey=fitkey)
         # Excluded because boundaries
-        flag = np.asarray(( np.abs(ell-np.nanmedian(ell))>mad_std(ell[ell==ell])*4 ) + ( np.abs(xy-np.nanmedian(xy))>mad_std(xy[xy==xy])*4),
+        flag = np.asarray(( np.abs(ab-np.nanmedian(ab))>mad_std(ab[ab==ab])*4 ) + ( np.abs(theta-np.nanmedian(theta))>mad_std(theta[theta==theta])*4),
                               dtype="bool")
 
         if np.all(flag):
@@ -204,19 +204,19 @@ class SlicePSFCollection( BaseObject ):
 
         Returns
         -------
-        [mean_ell, mean_ell.err [nMAD], mean_xy, mean_xy.err [nMAD]], mask_removed (True =removed)
+        [mean_ab, mean_ab.err [nMAD], mean_theta, mean_theta.err [nMAD]], mask_removed (True =removed)
         """
         from astropy.stats import mad_std
         if used_slindexes is None:
             used_slindexes = self.slindexes[~self.fetch_outlier()]
             
-        ell    = self.get_fitted_value("ell",        slindexes=used_slindexes, fitkey=fitkey)
-        xy  = self.get_fitted_value("xy" ,     slindexes=used_slindexes, fitkey=fitkey)
+        ab    = self.get_fitted_value("ab",        slindexes=used_slindexes, fitkey=fitkey)
+        theta  = self.get_fitted_value("theta" ,     slindexes=used_slindexes, fitkey=fitkey)
 
         
         # Excluded because boundaries
-        return  [np.average(ell), mad_std(ell)/np.sqrt(len(ell)-1),
-                     np.average(xy), mad_std(xy)]
+        return  [np.average(ab), mad_std(ab)/np.sqrt(len(ab)-1),
+                     np.average(theta), mad_std(theta)]
         
     def get_sigma_ratio(self, used_slindexes=None, fitkey=FITKEY):
         """ """
@@ -270,7 +270,7 @@ class SlicePSFCollection( BaseObject ):
         Parameters
         ----------
         key: [string]
-            which `fitvalues` key do you want? (e.g. xcentroid, ell, ...)
+            which `fitvalues` key do you want? (e.g. xcentroid, ab, ...)
 
         slindexes: [None or list] -optional-
             for which fitted slices do you want that key?
@@ -563,7 +563,7 @@ class SlicePSFCollection( BaseObject ):
         #                 #
         #    Data         #
         #                 #
-        [mean_ell, mean_ellerr, mean_xy, mean_xyerr]  = self.get_ellipse_parameters(used_slindexes=kept_slindexes)
+        [mean_ab, mean_aberr, mean_theta, mean_thetaerr]  = self.get_ellipse_parameters(used_slindexes=kept_slindexes)
         #                 #
         #    Axis         #
         #                 #
@@ -574,14 +574,14 @@ class SlicePSFCollection( BaseObject ):
 
         
         
-        fig = self._show_corner_( ["ell","xy"], fig=fig, labels=["ellipticity",r"Angle [rad]"],
-                                  expectation=[mean_ell, mean_xy] if show_model else None, expectation_err=[mean_ellerr, mean_xyerr],
+        fig = self._show_corner_( ["ab","theta"], fig=fig, labels=["ellipticity",r"Angle [rad]"],
+                                  expectation=[mean_ab, mean_theta] if show_model else None, expectation_err=[mean_aberr, mean_thetaerr],
                                   used_slindexes = kept_slindexes,
                                   error_prop=error_prop, **scatter_prop )
         
         if np.any(mask_removed):
             scatter_prop_out = dict(s=20, zorder=4, facecolors="None", edgecolors="0.7")
-            fig = self._show_corner_( ["ell","xy"], fig=fig, labels=["ellipticity",r"Angle [rad]"],
+            fig = self._show_corner_( ["ab","theta"], fig=fig, labels=["ellipticity",r"Angle [rad]"],
                                   used_slindexes = rejected_slindexes, show_labels=False,
                                   error_prop=error_prop, **scatter_prop_out )
         
@@ -980,17 +980,18 @@ class SlicePSF( PSFFitter ):
     def show_psf(self, ax=None, show=True, savefile=None, nobkgd=True, **kwargs):
         """ """
         import matplotlib.pyplot as mpl
-        from .model import get_radial_distance
+        from .model import get_effective_distance
         if ax is None:
             fig = mpl.figure(figsize=[6,4])
             ax  = fig.add_axes([0.13,0.1,0.77,0.8])
         else:
             fig = ax.figure
             
-            
-        r_ellipse = get_radial_distance(self._xfitted, self._yfitted, xcentroid=self.fitvalues['xcentroid'],
+
+        
+        r_ellipse = get_effective_distance(self._xfitted, self._yfitted, xcentroid=self.fitvalues['xcentroid'],
                                             ycentroid=self.fitvalues['ycentroid'],
-                                            yw=self.fitvalues['ell'], xy=self.fitvalues['xy'])
+                                            ab=self.fitvalues['ab'], theta=self.fitvalues['theta'])
         if nobkgd:
             background = self.model.get_background(self._xfitted, self._yfitted)
             datashown = self._datafitted - background

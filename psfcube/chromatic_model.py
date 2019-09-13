@@ -76,8 +76,8 @@ class ChromaticNormalMoffat( BaseObject ):
     def force_fit(self, cube,
                       psfmodel="NormalMoffatCurved",
                       slice_width=None,
-                      ell=None, xy=None,
-                      ellerr=None, xyerr=None,
+                      ab=None, theta=None,
+                      aberr=None, thetaerr=None,
                       force_ellipse=True,
                       force_centroid=True,
                       force_sigma=True,force_alpha=True):
@@ -120,16 +120,16 @@ class ChromaticNormalMoffat( BaseObject ):
                         "eta_boundaries": [np.nanmax([0.1,eta-etaerr]), eta+etaerr]
                         }
         # Ellipse
-        if ell is not None:
-            profile_lbda["ell_guess"] = ell
-            if ellerr is not None: profile_lbda["ell_boundaries"] = [ell-ellerr, ell+ellerr]
-        if xy is not None:
-            profile_lbda["xy_guess"] = xy
-            if xyerr is not None: profile_lbda["xy_boundaries"] = [xy-xyerr, xy+xyerr]
+        if ab is not None:
+            profile_lbda["ab_guess"] = ab
+            if aberr is not None: profile_lbda["ab_boundaries"] = [ab-aberr, ab+aberr]
+        if theta is not None:
+            profile_lbda["theta_guess"] = theta
+            if thetaerr is not None: profile_lbda["theta_boundaries"] = [theta-thetaerr, theta+thetaerr]
                 
-        if ell is not None and xy is not None and force_ellipse:
-            profile_lbda["ell_fixed"] = True
-            profile_lbda["xy_fixed"]  = True
+        if ab is not None and theta is not None and force_ellipse:
+            profile_lbda["ab_fixed"] = True
+            profile_lbda["theta_fixed"]  = True
         # 
         # => All Slices
         #

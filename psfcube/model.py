@@ -78,7 +78,7 @@ The profile should be normalize, but this is not mendatory.
 """
 def binormal_profile(x, y,
                 sigma, sigma_ratio, eta,
-                xy, ell,
+                theta, ab,
                 xcentroid=0, ycentroid=0,
                 amplitude=1):
     """ Return the model profile.
@@ -91,14 +91,14 @@ def binormal_profile(x, y,
             
     """
     print("BINORMAL NOT READY")
-    r = get_radial_distance(x, y, xcentroid=xcentroid, ycentroid=ycentroid,  yw=ell, xy=xy)
+    r = get_effective_distance(x, y, xcentroid=xcentroid, ycentroid=ycentroid,  ab=ab, theta=theta)
     n1 = _normal_(r, scale=sigma) 
     n2 = _normal_(r, scale=sigma*sigma_ratio)
     
     return amplitude * ( n1 + eta * n2)
 
 def moffat_profile(x, y, alpha, beta,
-                       xy, ell,
+                       theta, ab,
                        xcentroid=0, ycentroid=0,
                        amplitude=1):
     """ Return the model profile.
@@ -111,13 +111,13 @@ def moffat_profile(x, y, alpha, beta,
     array (model)
     """
     print("MOFFAT NOT READY")    
-    r = get_radial_distance(x, y, xcentroid=xcentroid, ycentroid=ycentroid,  yw=ell, xy=xy)
+    r = get_effective_distance(x, y, xcentroid=xcentroid, ycentroid=ycentroid,  ab=ab, theta=theta)
     n1 = _moffat_(r, alpha, beta)
     return amplitude * ( n1 )
 
 
 def normalmoffat_profile(x, y,
-                        sigma, alpha, eta, xy, ell,
+                        sigma, alpha, eta, theta, ab,
                         xcentroid=0, ycentroid=0,
                         amplitude=1,
                         split=False, radius=None):
@@ -133,13 +133,15 @@ def normalmoffat_profile(x, y,
     if x is None and y is None and radius is not None:
         r = radius
     else:
-        r = get_radial_distance(x, y, xcentroid=xcentroid, ycentroid=ycentroid,  yw=ell, xy=xy)
+        r = get_effective_distance(x, y, xcentroid=xcentroid, ycentroid=ycentroid,  ab=ab, theta=theta)
     
     beta = _alpha_to_beta_(alpha)
     normal = _normal_(r, scale=sigma) 
     moffat = _moffat_(r, alpha, beta=beta) 
     
-    normalization = np.sqrt(ell - xy**2)/( np.pi * (2 * eta * sigma**2 + alpha**2 / (beta - 1)) )
+    #normalization = np.sqrt(ell - xy**2)/( np.pi * (2 * eta * sigma**2 + alpha**2 / (beta - 1)) )
+    normalization_no_ell = 1/( np.pi * (2 * eta * sigma**2 + alpha**2 / (beta - 1)) )
+    normalization = normalization_no_ell * 1/ab #quickly made by MR, I have my doubt it is correct ?
     if split:
         return amplitude, normalization*moffat, normalization*eta * normal
     
@@ -211,7 +213,7 @@ def get_normalmoffat_normalisation( param_profile,
     float, float 
          [normalisation, estimated error]
     """
-    args = [param_profile[k] for k in ["sigma", "alpha", "eta", "xy", "ell", "xcentroid", "ycentroid"]]
+    args = [param_profile[k] for k in ["sigma", "alpha", "eta", "theta", "ab", "xcentroid", "ycentroid"]]
     return integrate.dblquad(normalmoffat_profile,
                                  param_profile["xcentroid"]-xbounds, param_profile["xcentroid"]+xbounds,
                                  gfun = lambda x:  param_profile["ycentroid"]-ybounds,
@@ -242,6 +244,19 @@ def curved_plane(x, y,
 #  Ellipticity              #
 #                           #
 # ========================= #
+def get_effective_distance(x,y, xcentroid=0, ycentroid=0, ab=1,theta=0, a=1):
+    """ 
+    This measures the effective distance in elliptical coordinates.
+    
+    """
+    dx, dy = (x-xcentroid), (y-ycentroid)
+    b = a*ab
+    cxx = np.cos(theta)**2/a**2 +  np.sin(theta)**2/b**2
+    cyy = np.sin(theta)**2/a**2 +  np.cos(theta)**2/b**2
+    cxy = 2*np.cos(theta)*np.sin(theta)*(1/a**2 - 1/b**2)
+    # - Measuring relative distances
+    return np.sqrt( cxx*dx**2 + cyy*dy**2 + cxy * (dx*dy) )
+
 def get_radial_distance(x, y, xcentroid=0, ycentroid=0, yw=0, xy=0):
     """ 
     Parameters
@@ -262,8 +277,13 @@ def get_radial_distance(x, y, xcentroid=0, ycentroid=0, yw=0, xy=0):
     -------
     radial distance in elliptical coordinates
     """
+    print(" DEPRECATED get_radial_distance, use 'get_effective_distance'")
+    print(yw, xy)
+    
     dx, dy = (x-xcentroid), (y-ycentroid)
-    return np.sqrt(dx**2 + yw * dy**2 + 2 * xy *dx*dy)
+    rdist = np.sqrt(dx**2 + yw * dy**2 + 2 * xy *dx*dy)
+    print(rdist)
+    return rdist
     
     
 def get_elliptical_distance(x, y, xcentroid=0, ycentroid=0, ell=0, xy=0):
@@ -347,11 +367,13 @@ class _PSFSliceModel_( BaseModel ):
 
     def get_radial_distance(self, x, y):
         """ """
-        return get_radial_distance(x, y,
-                                xcentroid=self.param_profile["xcentroid"],
-                                ycentroid=self.param_profile["ycentroid"],
-                                yw=self.param_profile["ell"],
-                                xy=self.param_profile["xy"])
+        return get_effective_distance(x, y,
+                                        xcentroid=self.param_profile["xcentroid"],
+                                        ycentroid=self.param_profile["ycentroid"],
+                                        ab=self.param_profile["ab"],
+                                        theta=self.param_profile["theta"],
+                                    a=1)
+
     
     # - To Be Defined
     def get_profile(self, x, y):
@@ -393,7 +415,7 @@ class BiNormalFlat( _PSFSliceModel_ ):
     NAME = "binormal-flat"
     PROFILE_PARAMETERS = ["amplitude",
                           "sigma", "sigma_ratio", "eta",
-                          "xy", "ell",
+                          "theta", "ab",
                           "xcentroid", "ycentroid"]
     
     BACKGROUND_PARAMETERS = ["bkgd"]
@@ -432,8 +454,8 @@ class BiNormalFlat( _PSFSliceModel_ ):
                             # SEDM DEFAULT VARIABLES   #
                             # ------------------------ #
                             # Ellipticity
-                            ell_guess=1, ell_boundaries=[0.2,5],   ell_fixed=False,
-                            xy_guess=0, xy_boundaries=[-0.6, 0.6], xy_fixed=False,
+                            ab_guess=0.9, ab_boundaries=[0.7,0.99],   ab_fixed=False,
+                            theta_guess=0, theta_boundaries=[-0.6, 0.6], theta_fixed=False,
                             # Size
                             sigma_guess = 1.3,
                             sigma_boundaries=[0.5, 5],
@@ -536,7 +558,7 @@ class MoffatFlat( _PSFSliceModel_ ):
     NAME = "moffat-flat"
     PROFILE_PARAMETERS = ["amplitude",
                           "alpha",  "beta",
-                          "xy", "ell",
+                          "theta", "ab",
                           "xcentroid", "ycentroid"]
     
     BACKGROUND_PARAMETERS = ["bkgd"]
@@ -578,8 +600,8 @@ class MoffatFlat( _PSFSliceModel_ ):
                             # SEDM DEFAULT VARIABLES   #
                             # ------------------------ #
                             # Ellipticity
-                            ell_guess=1, ell_boundaries=[0.2,5],   ell_fixed=False,
-                            xy_guess=0, xy_boundaries=[-0.6, 0.6], xy_fixed=False,
+                            ab_guess=0.9, ab_boundaries=[0.7,0.99],   ab_fixed=False,
+                            theta_guess=0, theta_boundaries=[-0.6, 0.6], theta_fixed=False,
                             # Size
                             # moffat
                             alpha_guess=4.,
@@ -680,7 +702,7 @@ class NormalMoffatFlat( _PSFSliceModel_ ):
     NAME = "normal/moffat-flat"
     PROFILE_PARAMETERS = ["amplitude",
                           "alpha", "eta", "sigma", 
-                          "xy", "ell",
+                          "theta", "ab",
                           "xcentroid", "ycentroid"]
     
     BACKGROUND_PARAMETERS = ["bkgd"]
@@ -719,8 +741,8 @@ class NormalMoffatFlat( _PSFSliceModel_ ):
                             # SEDM DEFAULT VARIABLES   #
                             # ------------------------ #
                             # Ellipticity
-                            ell_guess=1, ell_boundaries=[0.2,5],   ell_fixed=False,
-                            xy_guess=0, xy_boundaries=[-0.6, 0.6], xy_fixed=False,
+                            ab_guess=0.9, ab_boundaries=[0.7,0.99],   ab_fixed=False,
+                            theta_guess=0, theta_boundaries=[-0.6, 0.6], theta_fixed=False,
                             # Size
                             sigma_guess = 1.3,
                             sigma_boundaries=[1., 2],
