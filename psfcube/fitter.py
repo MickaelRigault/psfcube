@@ -26,9 +26,9 @@ def guess_fwhm(slice_, safecheck=True, verbose=True):
     
     if verbose: print("Guess FWHM %.1f [2 is typical] (not really arcsec units)"%fwhm_guess)
     if safecheck:
-        if fwhm_guess<1:
-            if verbose: print("Guessed FWHM lower then 1, strange, force to 1.5")
-            fwhm_guess = 1.5
+        if fwhm_guess<1.3:
+            if verbose: print("Guessed FWHM lower then 1.3, strange, force to 1.3")
+            fwhm_guess = 1.3
         if fwhm_guess>8:
             if verbose: print("Guessed FWHM higher then 8, strange, force to 8")
             fwhm_guess = 8
