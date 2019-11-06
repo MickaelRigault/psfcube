@@ -34,3 +34,18 @@ def fit_intrinsic(data, model, errors, dof, intrinsic_guess=None):
         intrinsic_guess = np.nanmedian(errors)
         
     return fmin(get_intrinsic_chi2dof, intrinsic_guess, disp=0)[0]
+
+
+def set_axes_edgecolor(ax, color,  ticks=True, labels=False):
+    """ """
+    import matplotlib
+    prop = {}
+    if ticks:
+        prop["color"] = color
+        prop["which"] = "both"
+    if labels:
+        prop["labelcolor"] = color
+    ax.tick_params(**prop)
+    for child in ax.get_children():
+        if isinstance(child, matplotlib.spines.Spine):
+            child.set_color(color)

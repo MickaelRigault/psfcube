@@ -117,7 +117,8 @@ class ChromaticNormalMoffat( BaseObject ):
                         "force_centroid":force_centroid,
                         "sigma_fixed":force_sigma,
                         "eta_guess": np.nanmean(self.eta),
-                        "eta_boundaries": [np.nanmax([0.1,eta-etaerr]), eta+etaerr]
+                        "eta_boundaries": [np.nanmax([0.1,eta-etaerr]), eta+etaerr],
+                        "fwhm_guess": "None", # Not looking for the fwhm
                         }
         # Ellipse
         if ab is not None:

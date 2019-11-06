@@ -6,7 +6,7 @@ import matplotlib.pyplot as mpl
 import warnings
 
 from propobject import BaseObject
-
+from scipy import stats
 from modefit.baseobjects import BaseFitter
 
 from .model import read_psfmodel
@@ -18,10 +18,28 @@ FITKEY  = "slpsf"
 USE_LEASTSQ = True
 
 
+def guess_fwhm(slice_, safecheck=True, verbose=True):
+    """ """        
+
+    mvsf = MultiVariateSliceFitter(slice_)
+    fwhm_guess = mvsf.fit()["sigma"]
+    
+    if verbose: print("Guess FWHM %.1f [2 is typical] (not really arcsec units)"%fwhm_guess)
+    if safecheck:
+        if fwhm_guess<1:
+            if verbose: print("Guessed FWHM lower then 1, strange, force to 1.5")
+            fwhm_guess = 1.5
+        if fwhm_guess>8:
+            if verbose: print("Guessed FWHM higher then 8, strange, force to 8")
+            fwhm_guess = 8
+            
+    return fwhm_guess
+
 def fit_slice(slice_, fitbuffer=None,
               psfmodel="NormalMoffatTilted", fitted_indexes=None,
               lbda=None, centroids=None, centroids_err=[2,2],
               adjust_errors=True, force_centroid=False,
+              fwhm_guess=None,
               **kwargs):
     """ Fit PSF Slice without forcing it's shape
 
@@ -36,7 +54,6 @@ def fit_slice(slice_, fitbuffer=None,
     slpsf = SlicePSF(slice_, psfmodel=psfmodel,
                     fitbuffer=fitbuffer, fitted_indexes=fitted_indexes)
 
-    
     if centroids is None:
         xcentroid, ycentroid = None, None
     elif len(centroids) !=2:
@@ -44,9 +61,17 @@ def fit_slice(slice_, fitbuffer=None,
     else:
         xcentroid, ycentroid = centroids
 
-    # - Fitting 
+    # - Fitting
+    if fwhm_guess is None:
+        print("fit_slice fwhm_guess is None")
+        fwhm_guess = guess_fwhm(slice_)
+    elif fwhm_guess == "None":
+        fwhm_guess = None
+    
     fit_default = slpsf.get_guesses(xcentroid=xcentroid,            ycentroid=ycentroid,
-                                    xcentroid_err=centroids_err[0], ycentroid_err=centroids_err[1])
+                                    xcentroid_err=centroids_err[0], ycentroid_err=centroids_err[1],
+                                        fwhm_guess=fwhm_guess)
+    
     if force_centroid:
         fit_default["xcentroid_fixed"] = True
         fit_default["ycentroid_fixed"] = True
@@ -140,6 +165,174 @@ def header_to_adr_param(header_, no_end_para_bounds=270, end_para_bounds=10):
         dict_out["airmass_boundaries"] = np.sort([start_airmass,end_airmass])
     
     return dict_out
+
+# ====================== #
+#
+#   Quick Guess Class    #
+#
+# ====================== #
+class MultiVariateSliceFitter( BaseObject ):
+    """ """
+    FREEPARAMETERS = ["x0","y0", "sigma", "ampl", "bkgd"]
+    PROPERTIES = ["slice"]
+    DERIVED_PROPERTIES = ["xy","centroid_flag"]
+    
+    def __init__(self, slice_ ):
+        """ """
+        self._properties["slice"]  =slice_
+
+    def _convert_to_slice_(self, data):
+        """ """
+        import pyifu
+        return pyifu.get_slice(data, self.slice.index_to_xy(self.slice.indexes),
+                                     spaxel_vertices=self.slice.spaxel_vertices,
+                                          indexes=self.slice.indexes)
+    def get_model(self, x0, y0, sigma, ampl, bkgd, as_slice=False):
+        """ """
+        
+        sigma = np.abs(sigma)
+        model = ampl*stats.multivariate_normal.pdf(self.xy, mean=[x0,y0], cov=sigma) + bkgd
+        if not as_slice:
+            return model
+        return self._convert_to_slice_(model)
+
+    def get_best_model(self, as_slice=True):
+        """ """
+        return self.get_model(*self.fitparams, as_slice=as_slice)
+    
+    def get_best_model_residual(self, as_slice=True, insigma=False):
+        """ """
+        res = self.data - self.get_model(*self.fitparams, as_slice=False)
+        if insigma:
+            res /= np.sqrt(self.variance)
+            
+        if not as_slice:
+            return res
+        return self._convert_to_slice_(res)
+    
+    def get_chi2(self, x0, y0, sigma, ampl, bkgd):
+        """ """
+        return np.sum((self.data-self.get_model(x0, y0, sigma, ampl, bkgd))**2/self.variance)
+    
+    def get_guess(self):
+        """ """
+        x0guess, y0guess = np.mean(self.xy[self.centroidflag],axis=0)
+        bkgdguess = np.percentile(self.data, 5)
+        sigmaguess = 2# np.mean(np.std(self.xy[self.centroidflag], axis=0))*3
+        amplguess = (self.data.max()-bkgdguess) / np.sqrt(2*np.pi*sigmaguess**2)
+        return {"x0":x0guess, "y0":y0guess, "sigma":sigmaguess, "ampl":amplguess, "bkgd":bkgdguess}
+
+    def load_centroidflag(self, percentcut=90):
+        """ """
+        self._derived_properties["centroid_flag"] = np.argwhere(self.data>np.percentile(self.data,percentcut)).flatten()
+
+    def fit(self, print_level=0, step=1, **kwargs):
+        """ """
+        from iminuit import Minuit
+        minuit_kwargs = {}
+        guesses = self.get_guess()
+        for param in self.FREEPARAMETERS:
+            minuit_kwargs[param]           = guesses[param]
+            if "sigma" in param:
+                minuit_kwargs["limit_"+param] = [0.5,None]
+            elif "ampl" in param:
+                minuit_kwargs["limit_"+param] = [0.,None]
+            else:
+                minuit_kwargs["limit_"+param]  = [None,None]
+            minuit_kwargs["fix_"+param]    = False
+
+            
+        self.minuit = Minuit(self.get_chi2,
+                             print_level=print_level,errordef=step,
+                             **{**minuit_kwargs,**kwargs})
+
+        self._migrad_output_ = self.minuit.migrad()
+        self.fitparams = np.asarray([self.minuit.values[k] for k in self.FREEPARAMETERS])
+        self.fitvalues = {}
+        for i,name in enumerate(self.FREEPARAMETERS):
+            self.fitvalues[name] = self.fitparams[i]
+            self.fitvalues[name+".err"] = self.covmatrix[i,i]
+
+        return self.fitvalues
+
+
+    def show(self):
+        """ """
+        import matplotlib.pyplot as mpl
+        fig = mpl.figure(figsize=[8,3])
+        axdata  = fig.add_axes([0.08,0.15,0.25,0.7])
+        axmodel = fig.add_axes([0.35,0.15,0.25,0.7])
+        axres   = fig.add_axes([0.70,0.15,0.25,0.7])
+    
+        self.slice.show(ax=axdata, show_colorbar=False)
+        model = self.get_best_model()
+        model.show(ax=axmodel, show_colorbar=False)
+    
+        res = self.get_best_model_residual()
+        res.show(ax=axres, show_colorbar=False)
+    
+        [ax.set_xticklabels(["" for t in ax.get_xticklabels()]) for ax in fig.axes]
+        [ax.set_yticklabels(["" for t in ax.get_xticklabels()]) for ax in fig.axes]
+        
+    # ================ #
+    #  Properties      #
+    # ================ #
+    def _read_hess_(self,hess):
+        """
+        """
+        if len(hess)==len(self.FREEPARAMETERS):
+            return hess
+        
+        indexFixed = [i for i,name in enumerate(self.FREEPARAMETERS)
+                      if "%s_fixed"%name in dir(self) and eval("self.%s_fixed"%name)]
+        for i in indexFixed:
+            newhess = np.insert(hess,i,0,axis=0)
+            newhess = np.insert(newhess,i,0,axis=1)
+            hess = newhess
+            
+        return hess
+    
+    @property
+    def covmatrix(self):
+        """ """
+        if self._migrad_output_[0]["is_valid"]:
+            return self._read_hess_(np.asarray(self.minuit.matrix()))
+        else:
+            fakeMatrix = np.zeros((len(self.fitparams),len(self.fitparams)))
+            for i,k in enumerate(self.FREEPARAMETERS):
+                fakeMatrix[i,i] = self.minuit.errors[k]**2
+            warnings.warn("Inaccurate covariance Matrix. Only trace defined")
+            return self._read_hess_(fakeMatrix)
+        
+    @property
+    def slice(self):
+        """ """
+        return self._properties["slice"]
+
+    @property
+    def data(self):
+        """ """
+        return self.slice.data
+
+    @property
+    def variance(self):
+        """ """
+        return self.slice.variance
+    
+    @property
+    def xy(self):
+        """ """
+        if self._derived_properties["xy"] is None:
+            self._derived_properties["xy"]= np.asarray(self.slice.index_to_xy(self.slice.indexes))
+        return self._derived_properties["xy"]
+
+    @property
+    def centroidflag(self):
+        """ """
+        if self._derived_properties["centroid_flag"] is None:
+            self.load_centroidflag()
+        return self._derived_properties["centroid_flag"]
+    
 # ====================== #
 #                        #
 #    PSF Classes         #
@@ -401,7 +594,7 @@ class SlicePSFCollection( BaseObject ):
     def fit_slice(self, slindex, psfmodel="NormalMoffatTilted",
                     centroids=None, centroids_err=[2,2],
                     adjust_errors=True,
-                    fitkey=FITKEY, **kwargs):
+                    fitkey=FITKEY, fwhm_guess=None, **kwargs):
         """ fit a PSF on a slice using the fit_slice() function
 
         Parameters
@@ -444,7 +637,7 @@ class SlicePSFCollection( BaseObject ):
         self._test_index_(slindex)
         slpsf = fit_slice(self.slices[slindex]['slice'], psfmodel=psfmodel,
                         centroids=centroids, centroids_err=centroids_err,
-                        adjust_errors=adjust_errors, **kwargs)
+                        adjust_errors=adjust_errors,fwhm_guess=fwhm_guess, **kwargs)
         
         # - shall this be recorded
         if fitkey is not None:
@@ -958,11 +1151,11 @@ class SlicePSF( PSFFitter ):
         # corresponding data entry:
         return self._xfitted, self._yfitted, self._datafitted, self._errorfitted
 
-    def get_guesses(self, xcentroid=None, xcentroid_err=2, ycentroid=None, ycentroid_err=2):
+    def get_guesses(self, xcentroid=None, xcentroid_err=2, ycentroid=None, ycentroid_err=2, **kwargs):
         """ you can help to pick the good positions by giving the x and y centroids """
         return self.model.get_guesses(self._xfitted, self._yfitted, self._datafitted,
                             xcentroid=xcentroid, xcentroid_err=xcentroid_err,
-                            ycentroid=ycentroid, ycentroid_err=ycentroid_err)
+                            ycentroid=ycentroid, ycentroid_err=ycentroid_err, **kwargs)
 
     # --------- #
     #  SETTER   #
@@ -977,7 +1170,7 @@ class SlicePSF( PSFFitter ):
     # --------- #
     # PLOTTER   #
     # --------- #
-    def show_psf(self, ax=None, show=True, savefile=None, nobkgd=True, **kwargs):
+    def show_psf(self, ax=None, show=True, savefile=None, nobkgd=True, legend=True, **kwargs):
         """ """
         import matplotlib.pyplot as mpl
         from .model import get_effective_distance
@@ -1003,8 +1196,10 @@ class SlicePSF( PSFFitter ):
                     marker="None", ls="None", ecolor="0.7", zorder=1, alpha=0.7)
 
         
-        self.model.display_model(ax, np.linspace(0.0,np.nanmax(r_ellipse),500), nobkgd=nobkgd,
-                                     **kwargs)
+        self.model.display_model(ax, np.linspace(0.0,np.nanmax(r_ellipse),500),
+                                nobkgd=nobkgd,
+                                legend=legend,
+                                **kwargs)
         
         if savefile:
             fig.savefig(savefile)
@@ -1035,26 +1230,41 @@ class SlicePSF( PSFFitter ):
                                     spaxel_vertices=self.slice.spaxel_vertices, variance=None,
                                     indexes=self.fitted_indexes)
         
-    def show(self, savefile=None, show=True,
+    def show(self, savefile=None, show=True, axes=None,
                  centroid_prop={}, logscale=True,psf_in_log=True, 
-                 vmin="2", vmax="98", ylim_low=None, xlim=[0,10], **kwargs):
-        """ """
+                 vmin="2", vmax="98", ylim_low=None, xlim=[0,10],
+                 psflegend=True, psflegendprop={}, titles=True, **kwargs):
+        """ Show the PSF fit profile
+
+        Parameters
+        ----------
+
+        axes: [list of axes/None] -optional-
+            provide the list of the *4* axes used by the method:
+            axdata, axmodel, axres   and   axpsf
+
+        """
         import matplotlib.pyplot            as mpl
         from .tools     import kwargs_update
         from pyifu.spectroscopy import get_slice
         
         # -- Axes Definition
-        fig = mpl.figure(figsize=(9, 2.5))
-        left, width, space = 0.05, 0.15, 0.02
-        bottom, height = 0.2, 0.65
-        axdata  = fig.add_axes([left+0*(width+space), bottom, width, height])
-        axmodel = fig.add_axes([left+1*(width+space), bottom, width, height],
-                                   sharex=axdata, sharey=axdata)
-        axres   = fig.add_axes([left+2*(width+space), bottom, width, height],
-                                   sharex=axdata, sharey=axdata)
+        if axes is None:
+            fig = mpl.figure( figsize=(9, 2.5))
+            left, width, space = 0.05, 0.15, 0.02
+            bottom, height = 0.2, 0.65
+            axdata  = fig.add_axes([left+0*(width+space), bottom, width, height])
+            axmodel = fig.add_axes([left+1*(width+space), bottom, width, height],
+                                       sharex=axdata, sharey=axdata)
+            axres   = fig.add_axes([left+2*(width+space), bottom, width, height],
+                                       sharex=axdata, sharey=axdata)
         
-        axpsf   = fig.add_axes([left+3*(width+space)+space*1.5, bottom, 0.955-(left+3*(width+space)+space), height])
+            axpsf   = fig.add_axes([left+3*(width+space)+space*1.5, bottom, 0.955-(left+3*(width+space)+space), height])
 
+        else:
+            axdata, axmodel, axres, axpsf = axes
+            fig = axdata.figure
+            
         # = Data
         slice_    = self._datafitted
         model_slice = self.get_model()
@@ -1065,14 +1275,18 @@ class SlicePSF( PSFFitter ):
         self.slice.show( ax=axdata, vmin=vmin, vmax=vmax , show_colorbar=False, show=False, autoscale=True)
         model_slice.show( ax=axmodel, vmin=vmin, vmax=vmax , show_colorbar=False, show=False, autoscale=True )
         res_slice.show( ax=axres, vmin=vmin, vmax=vmax , show_colorbar=False, show=False, autoscale=True )
-        self.show_psf(ax=axpsf, show=False, scalex=False, scaley=False)
+        self.show_psf(ax=axpsf, show=False, scalex=False, scaley=False, legend=psflegend, legendprop=psflegendprop)
         
         # fancy
         [ax_.set_yticklabels([]) for ax_ in fig.axes[1:]]
-        axdata.set_title("Data")
-        axmodel.set_title("Model")
-        axres.set_title("Residual")
-            
+        if titles:
+            axdata.set_title("Data")
+            axmodel.set_title("Model")
+            axres.set_title("Residual")
+            axpsf.text(0.95,1.05, "model: %s"%self.model.NAME, fontsize="small",
+                     va="bottom", ha="right", transform=axpsf.transAxes)
+
+        
         axpsf.set_xlabel("Elliptical distance [in spaxels]")
         if xlim is not None:
             axpsf.set_xlim(*xlim)
@@ -1082,8 +1296,6 @@ class SlicePSF( PSFFitter ):
             axpsf.set_ylim(ylim_low, slice_.max()*2)
             axpsf.set_yscale("log")
 
-        fig.text(0.95,0.95, "model: %s"%self.model.NAME, fontsize="small",
-                     va="top", ha="right")
         fig.figout(savefile=savefile, show=show)
         return fig
     # =================== #

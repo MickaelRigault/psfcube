@@ -21,12 +21,14 @@ def cube_to_spectrum(cube, ):
 #                        #
 # ====================== #
 
-def extract_star(cube, lbda_step1=None, psfmodel="NormalMoffatTilted",
+def extract_star(cube,
+                lbda_step1=None,
+                psfmodel="NormalMoffatTilted",fwhm_guess=None,
                 centroids=None, centroids_err=[5,5],
                 only_step1=False, spaxel_unit=1, step1_fit_prop={},
                 final_slice_width=None,
                 force_ellipse=True, force_centroid=True, force_sigma=True, force_alpha=True,
-                normalized=False, ncore=None, notebook=False, verbose=True):
+                normalized=False, ncore=None, notebook=False, verbose=True,):
     """ 
     Returns
     -------
@@ -37,7 +39,7 @@ def extract_star(cube, lbda_step1=None, psfmodel="NormalMoffatTilted",
     
     if lbda_step1 is None:
         # 6 Optical bins
-        lbda_step1 = lbda_and_bin_to_lbda_step1([5000,8000], 6)
+        lbda_step1 = lbda_and_bin_to_lbda_step1([4000,8000], 6)
 
         
     # Step 1
@@ -45,7 +47,8 @@ def extract_star(cube, lbda_step1=None, psfmodel="NormalMoffatTilted",
     psffit = fit_metaslices(cube, lbda_step1, 
                             psfmodel=psfmodel, 
                             centroids=centroids, centroids_err=centroids_err,
-                            spaxel_unit=spaxel_unit, **step1_fit_prop)
+                            spaxel_unit=spaxel_unit,fwhm_guess=fwhm_guess,
+                            **step1_fit_prop)
     if only_step1:
         return psffit
     
@@ -165,18 +168,25 @@ def build_parameter_prior(filenames, centroids=None, psfmodel="NormalMoffatTilte
 
 def fit_metaslices(cube, lbdas, psfmodel="NormalMoffatTilted",
                        centroids=None, centroids_err=[5,5],
-                       spaxel_unit=1,
+                       spaxel_unit=1, fwhm_guess=None,
                        **kwargs):
     """ """
-    from .fitter import SlicePSFCollection
+    from .fitter import SlicePSFCollection, guess_fwhm
     psffit = SlicePSFCollection()
     psffit.set_cube(cube)
 
+    # Provide Initial guess on FWHM
+    if fwhm_guess is None:
+        slice = cube.get_slice(lbda_min=6000, lbda_max=7000, slice_object=True)
+        fwhm_guess = guess_fwhm(slice)
+        
     for i,lbdar in enumerate(lbdas):
         psffit.extract_slice(i, *lbdar)
         slpsf = psffit.fit_slice(i, psfmodel=psfmodel,
-                                       centroids=centroids,
-                            centroids_err=centroids_err, **kwargs)
+                                    centroids=centroids,
+                                    centroids_err=centroids_err,
+                                    fwhm_guess=fwhm_guess,
+                                     **kwargs)
 
     psffit.load_adrfitter(spaxel_unit=spaxel_unit)
     psffit.fit_adr()

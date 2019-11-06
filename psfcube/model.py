@@ -76,6 +76,24 @@ def name_of_the_profile(x,y,
 The profile should be normalize, but this is not mendatory.
 
 """
+def normal_profile(x, y,
+                sigma, sigma_ratio, eta,
+                theta, ab,
+                xcentroid=0, ycentroid=0,
+                amplitude=1):
+    """ Return the model profile.
+    Here a binormal profile.
+    if decomposed
+        
+    Returns
+    -------
+    array (model)
+            
+    """
+    r = get_effective_distance(x, y, xcentroid=xcentroid, ycentroid=ycentroid,  ab=ab, theta=theta)
+    n1 = _normal_(r, scale=sigma) * 1/ab # normalisation ellipse
+    return amplitude * ( n1)
+
 def binormal_profile(x, y,
                 sigma, sigma_ratio, eta,
                 theta, ab,
@@ -110,9 +128,8 @@ def moffat_profile(x, y, alpha, beta,
     -------
     array (model)
     """
-    print("MOFFAT NOT READY")    
     r = get_effective_distance(x, y, xcentroid=xcentroid, ycentroid=ycentroid,  ab=ab, theta=theta)
-    n1 = _moffat_(r, alpha, beta)
+    n1 = _moffat_(r, alpha, beta, normed=True) * 1/ab # normalisation ellipse
     return amplitude * ( n1 )
 
 
@@ -425,7 +442,8 @@ class BiNormalFlat( _PSFSliceModel_ ):
     # ================== #
     def get_guesses(self, x, y, data,
                         xcentroid=None, xcentroid_err=2,
-                        ycentroid=None, ycentroid_err=2):
+                        ycentroid=None, ycentroid_err=2,
+                        fwhm_guess=None):
         """ return a dictionary containing simple best guesses """
         flagok     = ~np.isnan(x*y*data)
         x          = x[flagok]
@@ -443,6 +461,11 @@ class BiNormalFlat( _PSFSliceModel_ ):
             
         background = np.percentile(data,10)
         low_bounds = -np.percentile(data,0.01)
+
+        if fwhm_guess is None:
+            fwhm_guess = 2
+
+        scaleup = fwhm_guess/2.
         self._guess = dict( amplitude_guess=ampl * 5,
                             amplitude_boundaries= [None, None],
                             # - background
@@ -457,8 +480,8 @@ class BiNormalFlat( _PSFSliceModel_ ):
                             ab_guess=0.9, ab_boundaries=[0.7,0.99],   ab_fixed=False,
                             theta_guess=0, theta_boundaries=[-0.6, 0.6], theta_fixed=False,
                             # Size
-                            sigma_guess = 1.3,
-                            sigma_boundaries=[0.5, 5],
+                            sigma_guess = 1.3*scaleup,
+                            sigma_boundaries=[0.5, 5*scaleup],
                             sigma_ratio_guess=2.,
                             sigma_ratio_boundaries=[1.1, 4],
                             sigma_ratio_fixed=False,
@@ -570,7 +593,8 @@ class MoffatFlat( _PSFSliceModel_ ):
     # ================== #
     def get_guesses(self, x, y, data,
                         xcentroid=None, xcentroid_err=2,
-                        ycentroid=None, ycentroid_err=2):
+                        ycentroid=None, ycentroid_err=2,
+                        fwhm_guess=None):
         """ return a dictionary containing simple best guesses """
         flagok     = ~np.isnan(x*y*data)
         x          = x[flagok]
@@ -588,6 +612,12 @@ class MoffatFlat( _PSFSliceModel_ ):
 
         background = np.percentile(data,10)
         low_bounds = -np.percentile(data,0.01)
+        if fwhm_guess is None:
+            fwhm_guess = 2
+
+        scaleup = fwhm_guess/2.
+
+        
         self._guess = dict( amplitude_guess=ampl * 5,
                             amplitude_boundaries= [None, None],
                             # - background
@@ -604,8 +634,8 @@ class MoffatFlat( _PSFSliceModel_ ):
                             theta_guess=0, theta_boundaries=[-0.6, 0.6], theta_fixed=False,
                             # Size
                             # moffat
-                            alpha_guess=4.,
-                            alpha_boundaries=[1., 8],
+                            alpha_guess=4*scaleup,
+                            alpha_boundaries=[1., 8*scaleup],
                             beta_guess=2.,
                             beta_boundaries=[0., None],
                             # Converges faster by allowing degenerated param...
@@ -712,7 +742,8 @@ class NormalMoffatFlat( _PSFSliceModel_ ):
     # ================== #
     def get_guesses(self, x, y, data,
                         xcentroid=None, xcentroid_err=2,
-                        ycentroid=None, ycentroid_err=2):
+                        ycentroid=None, ycentroid_err=2,
+                        fwhm_guess=None):
         """ return a dictionary containing simple best guesses """
         flagok     = ~np.isnan(x*y*data)
         x          = x[flagok]
@@ -730,6 +761,11 @@ class NormalMoffatFlat( _PSFSliceModel_ ):
 
         background = np.percentile(data,10)
         low_bounds = -np.percentile(data,0.01)
+        if fwhm_guess is None:
+            fwhm_guess = 2
+
+        scaleup = fwhm_guess/2.
+        
         self._guess = dict( amplitude_guess=ampl * 5,
                             amplitude_boundaries= [None, None],
                             # - background
@@ -741,14 +777,14 @@ class NormalMoffatFlat( _PSFSliceModel_ ):
                             # SEDM DEFAULT VARIABLES   #
                             # ------------------------ #
                             # Ellipticity
-                            ab_guess=0.9, ab_boundaries=[0.7,0.99],   ab_fixed=False,
+                            ab_guess=0.9, ab_boundaries=[0.85,0.99],   ab_fixed=False,
                             theta_guess=0, theta_boundaries=[-0.6, 0.6], theta_fixed=False,
                             # Size
-                            sigma_guess = 1.3,
-                            sigma_boundaries=[1., 2],
+                            sigma_guess = 1.3*scaleup,
+                            sigma_boundaries=[1., 2*scaleup],
                             # moffat
-                            alpha_guess=8.,
-                            alpha_boundaries=[2., 15.],
+                            alpha_guess=8.*scaleup,
+                            alpha_boundaries=[2., 15.*scaleup],
                             #beta_guess=2.,
                             #beta_boundaries=[0., None],
                             # Converges faster by allowing degenerated param...
@@ -774,7 +810,7 @@ class NormalMoffatFlat( _PSFSliceModel_ ):
         """ The background at the given positions """
         return self.param_background["bkgd"]
         
-    def display_model(self, ax, rmodel, legend=True,
+    def display_model(self, ax, rmodel, legend=True, legendprop={},
                           nobkgd=True,
                           cmodel = "C1",
                           cgaussian1 = "C0",cgaussian2 = "C2",
@@ -802,7 +838,7 @@ class NormalMoffatFlat( _PSFSliceModel_ ):
 
         # - add the legend
         if legend:
-            ax.legend(loc="best", ncol=1)
+            ax.legend(**{**dict(loc="best", ncol=1),**legendprop})
         
     # ============= #
     #  Properties   #
