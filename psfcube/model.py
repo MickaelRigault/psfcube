@@ -378,9 +378,9 @@ class _PSFSliceModel_( BaseModel ):
         """ If you need to return prior value. Do so here. """
         return 0
     
-    def get_model(self, x, y):
+    def get_model(self, x, y, profileprop={}, bkgdprop={}):
         """ the profile + background model. """
-        return self.get_profile(x,y) + self.get_background(x,y)
+        return self.get_profile(x,y, **profileprop) + self.get_background(x,y, **bkgdprop)
 
     def get_radial_distance(self, x, y):
         """ """
@@ -421,6 +421,7 @@ class _PSFSliceModel_( BaseModel ):
         rmodel = np.linspace(0,20,1000)
         rspec = self.get_radial_profile(rmodel)
         return rmodel[np.argmin(np.abs(rspec-rspec[0]/2.))]
+    
 # ======================================= #
 #                                         #
 #  BiNormal + Background    Models        #
@@ -500,10 +501,9 @@ class BiNormalFlat( _PSFSliceModel_ ):
         """ """
         return binormal_profile(x, y, **{**self.param_profile,**kwargs})
     
-    def get_background(self,x,y):
+    def get_background(self,x, y, bkgd=None):
         """ The background at the given positions """
-        return self.param_background["bkgd"]
-
+        return self.param_background["bkgd"] if bkgd is None else bkgd
         
     def display_model(self, ax, rmodel, legend=True,
                           nobkgd=True,
@@ -556,18 +556,25 @@ class BiNormalTilted( BiNormalFlat ):
     NAME = "binormal-tilted"
     BACKGROUND_PARAMETERS = ["bkgd","bkgdx","bkgdy"]
     
-    def get_background(self, x, y):
+    def get_background(self, x, y, **bkgdprop):
         """ The background at the given positions """
-        return tilted_plane(x, y, [self.param_background[k] for k in self.BACKGROUND_PARAMETERS])
+        if bkgdprop is None or len(bkgdprop)==0:
+            bkgdprop = self.param_background
+            
+        return tilted_plane(x, y, [bkgdprop[k] for k in self.BACKGROUND_PARAMETERS])
+
     
 class BiNormalCurved( BiNormalFlat ):
     """ """
     NAME = "binormal-curved"
     BACKGROUND_PARAMETERS = ["bkgd","bkgdx","bkgdy","bkgdxy","bkgdxx","bkgdyy"]
     
-    def get_background(self, x, y):
+    def get_background(self, x, y, **bkgdprop):
         """ The background at the given positions """
-        return curved_plane(x, y, [self.param_background[k] for k in self.BACKGROUND_PARAMETERS])
+        if bkgdprop is None or len(bkgdprop)==0:
+            bkgdprop = self.param_background
+            
+        return curved_plane(x, y, [bkgdprop[k] for k in self.BACKGROUND_PARAMETERS])
 
 # ======================================= #
 #                                         #
@@ -654,9 +661,10 @@ class MoffatFlat( _PSFSliceModel_ ):
         """ """
         return moffat_profile(x, y,  **{**self.param_profile,**kwargs})
     
-    def get_background(self,x,y):
+    def get_background(self,x, y, bkgd=None):
         """ The background at the given positions """
-        return self.param_background["bkgd"]
+        return self.param_background["bkgd"] if bkgd is None else bkgd
+    
     
     def display_model(self, ax, rmodel, legend=True,
                           nobkgd=True,
@@ -707,18 +715,24 @@ class MoffatTilted( MoffatFlat ):
     NAME = "binormal-tilted"
     BACKGROUND_PARAMETERS = ["bkgd","bkgdx","bkgdy"]
     
-    def get_background(self, x, y):
+    def get_background(self, x, y, **bkgdprop):
         """ The background at the given positions """
-        return tilted_plane(x, y, [self.param_background[k] for k in self.BACKGROUND_PARAMETERS])
+        if bkgdprop is None or len(bkgdprop)==0:
+            bkgdprop = self.param_background
+            
+        return tilted_plane(x, y, [bkgdprop[k] for k in self.BACKGROUND_PARAMETERS])
     
 class MoffatCurved( MoffatFlat ):
     """ """
     NAME = "binormal-curved"
     BACKGROUND_PARAMETERS = ["bkgd","bkgdx","bkgdy","bkgdxy","bkgdxx","bkgdyy"]
     
-    def get_background(self, x, y):
+    def get_background(self, x, y, **bkgdprop):
         """ The background at the given positions """
-        return curved_plane(x, y, [self.param_background[k] for k in self.BACKGROUND_PARAMETERS])
+        if bkgdprop is None or len(bkgdprop)==0:
+            bkgdprop = self.param_background
+            
+        return curved_plane(x, y, [bkgdprop[k] for k in self.BACKGROUND_PARAMETERS])
 
 # ======================================= #
 #                                         #
@@ -806,9 +820,9 @@ class NormalMoffatFlat( _PSFSliceModel_ ):
         """ """
         return normalmoffat_profile(x, y, **{**self.param_profile,**kwargs})
     
-    def get_background(self,x,y):
+    def get_background(self,x, y, bkgd=None):
         """ The background at the given positions """
-        return self.param_background["bkgd"]
+        return self.param_background["bkgd"] if bkgd is None else bkgd
         
     def display_model(self, ax, rmodel, legend=True, legendprop={},
                           nobkgd=True,
@@ -816,7 +830,6 @@ class NormalMoffatFlat( _PSFSliceModel_ ):
                           cgaussian1 = "C0",cgaussian2 = "C2",
                           cbkgd="k", zorder=7, **kwargs):
         """ """
-        
         amplitude, normed_moffat, normed_normal = normalmoffat_profile(None, None, radius=rmodel, split=True, **self.param_profile)
         
         # and its background
@@ -858,15 +871,23 @@ class NormalMoffatTilted( NormalMoffatFlat ):
     NAME = "normal/moffat-tilted"
     BACKGROUND_PARAMETERS = ["bkgd","bkgdx","bkgdy"]
     
-    def get_background(self, x, y):
+    def get_background(self, x, y, **bkgdprop):
         """ The background at the given positions """
-        return tilted_plane(x, y, [self.param_background[k] for k in self.BACKGROUND_PARAMETERS])
+        if bkgdprop is None or len(bkgdprop)==0:
+            bkgdprop = self.param_background
+            
+        return tilted_plane(x, y, [bkgdprop[k] for k in self.BACKGROUND_PARAMETERS])
+
     
 class NormalMoffatCurved( NormalMoffatFlat ):
     """ """
     NAME = "normal/moffat-curved"
     BACKGROUND_PARAMETERS = ["bkgd","bkgdx","bkgdy","bkgdxy","bkgdxx","bkgdyy"]
     
-    def get_background(self, x, y):
+    def get_background(self, x, y, **bkgdprop):
         """ The background at the given positions """
-        return curved_plane(x, y, [self.param_background[k] for k in self.BACKGROUND_PARAMETERS])
+        if bkgdprop is None or len(bkgdprop)==0:
+            bkgdprop = self.param_background
+            
+        return curved_plane(x, y, [bkgdprop[k] for k in self.BACKGROUND_PARAMETERS])
+

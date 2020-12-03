@@ -996,7 +996,18 @@ class PSFFitter( BaseFitter ):
         """ provide the spaxel indexes that will be fitted """
         self._derived_properties["fitted_indexes"] = indexes
         self._set_fitted_values_()
-       
+
+    def _fit_readout_(self, **kwargs):
+        """ Gather the output in the readout, you could improve that in you child class"""
+        _ = super()._fit_readout_(**kwargs)
+#        self.fitvalues["amplitude"] *= self._amplscale
+#        self.fitvalues["amplitude.err"] *= self._amplscale
+#        for k in self.model.BACKGROUND_PARAMETERS:
+#            self.fitvalues[k] *= self._amplscale
+#            self.fitvalues[k+".err"] *= self._amplscale
+            
+        self.fitvalues["used_amplscale"] = self._amplscale
+        return _
     # ================ #
     #  Properties      #
     # ================ #
@@ -1005,16 +1016,22 @@ class PSFFitter( BaseFitter ):
         """ """
         return self._properties['spaxelhandler']
 
-
-    def _set_fitted_values_(self):
+    def _set_fitted_values_(self, scale_down=True):
         """ """
         x, y = np.asarray(self._spaxelhandler.index_to_xy(self.fitted_indexes)).T
+        
         self._derived_properties['xfitted'] = x
         self._derived_properties['yfitted'] = y
-        self._derived_properties['datafitted']  = self._spaxelhandler.data.T[self._fit_dataindex].T
+        if scale_down:
+            ampl = np.nanmean(self._spaxelhandler.data.T[self._fit_dataindex].T)
+        else:
+            ampl = 1
+        self._derived_properties['datafitted']  = self._spaxelhandler.data.T[self._fit_dataindex].T / ampl
+
+        self._hamplscale = ampl
+        
         if USE_LEASTSQ:
             from astropy.stats import mad_std
-            
             self._derived_properties['errorfitted'] = mad_std(self._datafitted[self._datafitted==self._datafitted])*1.4
             self.set_error_scale(1)
             self.set_intrinsic_error(0)
@@ -1022,11 +1039,11 @@ class PSFFitter( BaseFitter ):
         else:
             if np.any(self._spaxelhandler.variance.T[self._fit_dataindex]<0):
                 warnings.warn("Negative variance detected. These variance at set back to twice the median vairance.")
-                var = self._spaxelhandler.variance.T[self._fit_dataindex]
+                var = self._spaxelhandler.variance.T[self._fit_dataindex] / ampl**2
                 var[var<=0] = np.nanmedian(var)*2
                 self._derived_properties['errorfitted'] = np.sqrt(var)
             else:
-                self._derived_properties['errorfitted'] = np.sqrt(self._spaxelhandler.variance.T[self._fit_dataindex]).T
+                self._derived_properties['errorfitted'] = np.sqrt(self._spaxelhandler.variance.T[self._fit_dataindex]).T / ampl
             
             if self._side_properties['errorscale'] is None:
                 self.set_error_scale(1)
@@ -1069,7 +1086,11 @@ class PSFFitter( BaseFitter ):
     def _errorscale(self):
         """ """
         return self._side_properties['errorscale']
-    
+
+    @property
+    def _amplscale(self):
+        """ """
+        return self._hamplscale
     # - indexes and ids
     @property
     def fit_area(self):
@@ -1190,6 +1211,7 @@ class SlicePSF( PSFFitter ):
             datashown = self._datafitted - background
         else:
             datashown = self._datafitted
+            
         ax.scatter(r_ellipse, datashown, marker="o", zorder=2, s=80, edgecolors="0.7",
                        facecolors=mpl.cm.binary(0.2,0.7))
         ax.errorbar(r_ellipse, datashown, yerr=self._errorfitted,
@@ -1206,32 +1228,60 @@ class SlicePSF( PSFFitter ):
         if show:
             fig.show()
 
-    def get_model(self):
+    def get_guess_slice(self, **kwargs):
         """ """
-        from pyifu import get_slice
-        return get_slice(self.model.get_model(self._xfitted ,self._yfitted),
+        from pyifu import get_slice        
+        return self.get_model_slice(guess=True)
+
+    def get_model(self, scaleup=True, guess=False, **kwargs):
+        """ """
+        if guess:
+            guessdict   = self.get_guesses(**kwargs)
+            profileprop = {k:guessdict[k+"_guess"] for k in self.model.PROFILE_PARAMETERS}
+            bkgdprop    = {k:guessdict[k+"_guess"] for k in self.model.BACKGROUND_PARAMETERS}
+        else:
+            profileprop = {}
+            bkgdprop    = {}
+
+        ampl = 1 if not scaleup else self._amplscale
+        return self.model.get_model(self._xfitted ,self._yfitted, profileprop, bkgdprop) * ampl
+    
+    def get_model_slice(self, scaleup=True, guess=False, **kwargs):
+        """ """
+        from pyifu import get_slice            
+        return get_slice(self.get_model(guess=guess, **kwargs),
                              np.asarray(self.slice.index_to_xy(self.fitted_indexes)),
                                     spaxel_vertices=self.slice.spaxel_vertices, variance=None,
                                     indexes=self.fitted_indexes)
 
-    def get_fitted_slice(self):
+    def get_fitted_data(self, scaleup=True):
+        """ """
+        ampl = 1 if not scaleup else self._amplscale
+        return self._datafitted * ampl
+    
+    def get_fitted_slice(self, scaleup=True):
         """ """
         from pyifu import get_slice
-        return get_slice(self._datafitted,
-                             np.asarray(self.slice.index_to_xy(self.fitted_indexes)),
-                                    spaxel_vertices=self.slice.spaxel_vertices, variance=None,
-                                    indexes=self.fitted_indexes)
+        return get_slice(self.get_fitted_data(scaleup=scaleup),
+                         np.asarray(self.slice.index_to_xy(self.fitted_indexes)),
+                         spaxel_vertices=self.slice.spaxel_vertices, variance=None,
+                         indexes=self.fitted_indexes)
 
-    def get_residual_slice(self):
+    def get_residual(self, scaleup=True, toguess=False, **kwargs):
+        """ """
+        return self.get_fitted_data(scaleup=scaleup) - self.get_model(scaleup=scaleup, guess=toguess, **kwargs)
+    
+    
+    def get_residual_slice(self, scaleup=True,  toguess=False, **kwargs):
         """ """
         from pyifu import get_slice
-        return get_slice(self._datafitted - self.model.get_model(self._xfitted ,self._yfitted),
-                             np.asarray(self.slice.index_to_xy(self.fitted_indexes)),
-                                    spaxel_vertices=self.slice.spaxel_vertices, variance=None,
-                                    indexes=self.fitted_indexes)
+        return get_slice(self.get_residual(scaleup=scaleup, toguess=toguess, **kwargs),
+                         np.asarray(self.slice.index_to_xy(self.fitted_indexes)),
+                         spaxel_vertices=self.slice.spaxel_vertices, variance=None,
+                         indexes=self.fitted_indexes)
         
-    def show(self, savefile=None, show=True, axes=None,
-                 centroid_prop={}, logscale=True,psf_in_log=True, 
+    def show(self, savefile=None, show=True, axes=None, guess=False, scaleup=True,
+                 centroid_prop={}, logscale=True,psf_in_log=False, 
                  vmin="2", vmax="98", ylim_low=None, xlim=[0,10],
                  psflegend=True, psflegendprop={}, titles=True, **kwargs):
         """ Show the PSF fit profile
@@ -1266,10 +1316,10 @@ class SlicePSF( PSFFitter ):
             fig = axdata.figure
             
         # = Data
-        slice_    = self._datafitted
-        model_slice = self.get_model()
+        slice_    = self.get_fitted_data(scaleup=scaleup)
+        model_slice = self.get_model_slice(guess=guess, scaleup=scaleup)
         #x,y       = np.asarray(self.slice.index_to_xy(self.slice.indexes)).T
-        res_slice = self.get_residual_slice()
+        res_slice = self.get_residual_slice(toguess=guess, scaleup=scaleup)
         
         # = Plot
         self.slice.show( ax=axdata, vmin=vmin, vmax=vmax , show_colorbar=False, show=False, autoscale=True)
@@ -1281,8 +1331,8 @@ class SlicePSF( PSFFitter ):
         [ax_.set_yticklabels([]) for ax_ in fig.axes[1:]]
         if titles:
             axdata.set_title("Data")
-            axmodel.set_title("Model")
-            axres.set_title("Residual")
+            axmodel.set_title("Model"+ (" (guess)" if guess else ""))
+            axres.set_title("Residual" + (" (to guess)" if guess else ""))
             axpsf.text(0.95,1.05, "model: %s"%self.model.NAME, fontsize="small",
                      va="bottom", ha="right", transform=axpsf.transAxes)
 

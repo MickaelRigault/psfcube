@@ -88,7 +88,9 @@ def extract_star(cube,
                                            for i in range(len(lbdas))]),
                         **cube_prop)
     # = The spectrum
-    flux,err  = np.asarray([[slfits[i].fitvalues["amplitude"],slfits[i].fitvalues["amplitude.err"]]  for i in range(len(lbdas))]).T
+    flux,err  = np.asarray([[slfits[i].fitvalues["amplitude"]*slfits[i].fitvalues["used_amplscale"],
+                             slfits[i].fitvalues["amplitude.err"]*slfits[i].fitvalues["used_amplscale"]]
+                           for i in range(len(lbdas))]).T
     
     # Normalization
     if normalized:
