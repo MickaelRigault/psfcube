@@ -164,18 +164,12 @@ def normalmoffat_profile(x, y,
     
     return amplitude * normalization* ( moffat + eta * normal )
 
-
-
-
-
-
-
-
+#
+# - Start: Internal
 def _alpha_to_beta_(alpha, b0=0.25, b1=0.63):
     """ Ratio given by SNIFS """
     return b0+alpha*b1
 
-# Profiles 
 def _normal_(r, scale, normed=False):
     """ """
     if not normed:
@@ -186,7 +180,8 @@ def _moffat_(r, alpha, beta, normed=False):
     """ """
     norm =  2*(beta-1)/alpha**2 if normed else 1
     return norm * (1 + (r/alpha)**2 )**(-beta)
-
+# - End: Internal
+#
 
 
 def get_normalmoffat_normalisation( param_profile,
