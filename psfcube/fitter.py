@@ -18,13 +18,14 @@ FITKEY  = "slpsf"
 USE_LEASTSQ = True
 
 
-def guess_fwhm(slice_, safecheck=True, verbose=True):
+def guess_fwhm(slice_, safecheck=True, verbose=False):
     """ """        
 
     mvsf = MultiVariateSliceFitter(slice_)
     fwhm_guess = mvsf.fit()["sigma"]
     
-    if verbose: print("Guess FWHM %.1f [2 is typical] (not really arcsec units)"%fwhm_guess)
+    if verbose:
+        print("Guess FWHM %.1f [2 is typical] (not really arcsec units)"%fwhm_guess)
     if safecheck:
         if fwhm_guess<1.3:
             if verbose: print("Guessed FWHM lower then 1.3, strange, force to 1.3")
@@ -39,7 +40,7 @@ def fit_slice(slice_, fitbuffer=None,
               psfmodel="NormalMoffatTilted", fitted_indexes=None,
               lbda=None, centroids=None, centroids_err=[2,2],
               adjust_errors=True, force_centroid=False,
-              fwhm_guess=None,
+              fwhm_guess=None, verbose=True,
               **kwargs):
     """ Fit PSF Slice without forcing it's shape
 
@@ -64,7 +65,7 @@ def fit_slice(slice_, fitbuffer=None,
     # - Fitting
     if fwhm_guess is None:
         print("fit_slice fwhm_guess is None")
-        fwhm_guess = guess_fwhm(slice_)
+        fwhm_guess = guess_fwhm(slice_, verbose=verbose)
     elif fwhm_guess == "None":
         fwhm_guess = None
     

@@ -28,7 +28,8 @@ def extract_star(cube,
                 only_step1=False, spaxel_unit=1, step1_fit_prop={},
                 final_slice_width=None,
                 force_ellipse=True, force_centroid=True, force_sigma=True, force_alpha=True,
-                normalized=False, ncore=None, notebook=False, verbose=True,):
+                normalized=False, ncore=None, notebook=False,
+                verbose=True):
     """ 
     Returns
     -------
@@ -48,6 +49,7 @@ def extract_star(cube,
                             psfmodel=psfmodel, 
                             centroids=centroids, centroids_err=centroids_err,
                             spaxel_unit=spaxel_unit,fwhm_guess=fwhm_guess,
+                            verbose=verbose,
                             **step1_fit_prop)
     if only_step1:
         return psffit
@@ -66,6 +68,7 @@ def extract_star(cube,
                                   force_centroid=force_centroid,
                                   force_sigma=force_sigma, force_alpha=force_alpha,
                                   slice_width=final_slice_width,
+                                  verbose=verbose
                                   )
     lbdas = np.asarray([slfits[i].lbda for i in range(len(slfits))])
     # Returns all structures
@@ -170,7 +173,7 @@ def build_parameter_prior(filenames, centroids=None, psfmodel="NormalMoffatTilte
 
 def fit_metaslices(cube, lbdas, psfmodel="NormalMoffatTilted",
                        centroids=None, centroids_err=[5,5],
-                       spaxel_unit=1, fwhm_guess=None,
+                       spaxel_unit=1, fwhm_guess=None, verbose=True,
                        **kwargs):
     """ """
     from .fitter import SlicePSFCollection, guess_fwhm
@@ -180,7 +183,7 @@ def fit_metaslices(cube, lbdas, psfmodel="NormalMoffatTilted",
     # Provide Initial guess on FWHM
     if fwhm_guess is None:
         slice = cube.get_slice(lbda_min=6000, lbda_max=7000, slice_object=True)
-        fwhm_guess = guess_fwhm(slice)
+        fwhm_guess = guess_fwhm(slice, verbose=verbose)
         
     for i,lbdar in enumerate(lbdas):
         psffit.extract_slice(i, *lbdar)

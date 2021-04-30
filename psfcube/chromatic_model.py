@@ -80,7 +80,8 @@ class ChromaticNormalMoffat( BaseObject ):
                       aberr=None, thetaerr=None,
                       force_ellipse=True,
                       force_centroid=True,
-                      force_sigma=True,force_alpha=True):
+                      force_sigma=True,force_alpha=True,
+                      verbose=True):
         """ 
         slice_width: [int/None]
             How may lbda-slices array do you combine.
@@ -140,8 +141,8 @@ class ChromaticNormalMoffat( BaseObject ):
                 profile_lbda["sigma_boundaries"] = [sigma_lbdas[i]-0.1,sigma_lbdas[i]+0.1]
                 # Centroid
                 profile_lbda["centroids"]      = self.get_position(l_)
-                if i%40 == 0:
-                    print(i,"/",len(cube.lbda))
+                if i%40 == 0 and verbose:
+                    print(f"{i:03d}/{len(cube.lbda)}")
                 slpsf[i] = fit_slice(cube.get_slice(index=i, slice_object=True),
                                         psfmodel=psfmodel, **profile_lbda)
         # 
@@ -153,8 +154,8 @@ class ChromaticNormalMoffat( BaseObject ):
                 profile_lbda["sigma_boundaries"] = [sigma_lbdas[i]-0.1,sigma_lbdas[i]+0.1]
                 # Centroid
                 profile_lbda["centroids"]      = self.get_position(np.mean(l_))
-                if i%10 == 0:
-                    print(i,"/",len(lbdas))
+                if i%10 == 0 and verbose:
+                    print(f"{i:03d}/{len(cube.lbda)}")
                 slpsf[i] = fit_slice(cube.get_slice(lbda_min=l_[0],lbda_max=l_[1], slice_object=True),
                                         psfmodel=psfmodel, **profile_lbda)
         return slpsf
