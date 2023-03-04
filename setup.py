@@ -47,7 +47,7 @@ if __name__ == "__main__":
                 "numpy>=1.21.6",
                 "pyifu",
                 "scipy>=1.7.3",
-                "shapely"
+                "shapely>=1.8.0"
           ],
           packages=packages,
           package_data={},
