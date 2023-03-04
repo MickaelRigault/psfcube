@@ -19,25 +19,7 @@ try:
 except ImportError:
     from distutils.core import setup
 
-def check_dependencies():
-    install_requires = []
-
-    try:
-        import propobject
-    except ImportError:
-        install_requires.append('propobject')
-       
-    try:
-        import modefit
-    except ImportError:
-       install_requires.append('modefit')
-       
-     
-    return install_requires
-
 if __name__ == "__main__":
-
-    install_requires = check_dependencies()
 
     if _has_setuptools:
         packages = find_packages()
@@ -57,7 +39,16 @@ if __name__ == "__main__":
           url=URL,
           version=VERSION,
           download_url=DOWNLOAD_URL,
-          install_requires=install_requires,
+          install_requires= [
+                "astropy>=4.0.5",
+                "iminuit>=2.0.0",
+                "matplotlib",
+                "modefit>=0.4.0",
+                "numpy>=1.21.6",
+                "pyifu",
+                "scipy>=1.7.3",
+                "shapely"
+          ],
           packages=packages,
           package_data={},
           classifiers=[
