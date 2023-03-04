@@ -230,25 +230,32 @@ class MultiVariateSliceFitter( BaseObject ):
     def fit(self, print_level=0, step=1, **kwargs):
         """ """
         from iminuit import Minuit
-        minuit_kwargs = {}
         guesses = self.get_guess()
+        values = {}
+        limits = {}
+        fixed = {}
         for param in self.FREEPARAMETERS:
-            minuit_kwargs[param]           = guesses[param]
+            values[param] = guesses[param]
             if "sigma" in param:
-                minuit_kwargs["limit_"+param] = [0.5,None]
+                limits[param] = (0.5,None)
             elif "ampl" in param:
-                minuit_kwargs["limit_"+param] = [0.,None]
+                limits[param] = (0.,None)
             else:
-                minuit_kwargs["limit_"+param]  = [None,None]
-            minuit_kwargs["fix_"+param]    = False
+                limits[param]  = (None,None)
+            fixed[param]    = False
 
-            
-        self.minuit = Minuit(self.get_chi2,
-                             print_level=print_level,errordef=step,
-                             **{**minuit_kwargs,**kwargs})
+        self.minuit = Minuit(self.get_chi2, **values)
+        self.minuit.print_level = print_level
+        self.minuit.errordef = step
+        for limit in limits:
+            self.minuit.limits[limit] = limits[limit]
+        for fix in fixed:
+            if fixed[fix] is True:
+                self.minuit.fixed[fix] = True
 
         self._migrad_output_ = self.minuit.migrad()
-        self.fitparams = np.asarray([self.minuit.values[k] for k in self.FREEPARAMETERS])
+        values = self.minuit.values
+        self.fitparams = np.asarray([values[k] for k in self.FREEPARAMETERS])
         self.fitvalues = {}
         for i,name in enumerate(self.FREEPARAMETERS):
             self.fitvalues[name] = self.fitparams[i]
@@ -296,12 +303,13 @@ class MultiVariateSliceFitter( BaseObject ):
     @property
     def covmatrix(self):
         """ """
-        if self._migrad_output_[0]["is_valid"]:
-            return self._read_hess_(np.asarray(self.minuit.matrix()))
+        if self._migrad_output_.valid:
+            return self._read_hess_(np.asarray(self.minuit.covariance))
         else:
             fakeMatrix = np.zeros((len(self.fitparams),len(self.fitparams)))
+            errors = self.minuit.errors
             for i,k in enumerate(self.FREEPARAMETERS):
-                fakeMatrix[i,i] = self.minuit.errors[k]**2
+                fakeMatrix[i,i] = errors[k]**2
             warnings.warn("Inaccurate covariance Matrix. Only trace defined")
             return self._read_hess_(fakeMatrix)
         
